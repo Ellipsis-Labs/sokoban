@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "node-allocator",
+    "deque",
+    "critbit",
+    "red-black-tree"
+]
