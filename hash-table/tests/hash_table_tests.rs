@@ -1,9 +1,9 @@
 use bytemuck::Pod;
 use bytemuck::Zeroable;
+use hash_table::*;
 use rand::rngs::ThreadRng;
 use rand::thread_rng;
 use rand::{self, Rng};
-use hash_table::*;
 use std::collections::BTreeMap;
 
 const MAX_SIZE: usize = 50000;
@@ -34,7 +34,7 @@ impl Widget {
 async fn test_simulate() {
     type HashMap = HashTable<u128, Widget, NUM_BUCKETS, MAX_SIZE>;
     let mut buf = vec![0u8; std::mem::size_of::<HashMap>()];
-    let hm = HashMap::new_from_slice(buf.as_mut_slice()); 
+    let hm = HashMap::new_from_slice(buf.as_mut_slice());
     println!("Size: {}", std::mem::size_of::<HashMap>());
     let mut rng = thread_rng();
     let mut keys = vec![];

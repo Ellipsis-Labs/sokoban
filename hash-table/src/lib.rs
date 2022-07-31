@@ -151,7 +151,7 @@ impl<
             }
         }
         if self.size() >= MAX_SIZE - 1 {
-            return None
+            return None;
         }
         let node_index = self.allocator.add_node(HashNode::new(key, value));
         self.buckets[bucket_index] = node_index;

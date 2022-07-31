@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use node_allocator::{Node, NodeAllocator, ZeroCopy, SENTINEL};
+use node_allocator::{NodeAllocator, ZeroCopy, SENTINEL};
 
 // Register aliases
 pub const PREV: u32 = 0;
@@ -147,57 +147,62 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         self.allocator.size as usize
     }
 
-    pub fn iter(&self) -> DequeIterator<'_, T> {
-        DequeIterator::<T> {
-            nodes: &self.allocator.nodes,
+    pub fn iter(&self) -> DequeIterator<'_, T, MAX_SIZE> {
+        DequeIterator::<T, MAX_SIZE> {
+            deque: self,
             ptr: self.head,
         }
     }
 
-    pub fn iter_mut(&mut self) -> DequeIteratorMut<'_, T> {
-        DequeIteratorMut::<T> {
-            nodes: &mut self.allocator.nodes,
-            ptr: self.head,
+    pub fn iter_mut(&mut self) -> DequeIteratorMut<'_, T, MAX_SIZE> {
+        let head = self.head;
+        DequeIteratorMut::<T, MAX_SIZE> {
+            deque: self,
+            ptr: head,
         }
     }
 }
 
-pub struct DequeIterator<'a, T: Default + Copy + Clone + Pod + Zeroable> {
-    nodes: &'a [Node<T, 2>],
+pub struct DequeIterator<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> {
+    deque: &'a Deque<T, MAX_SIZE>,
     ptr: u32,
 }
 
-impl<'a, T: Default + Copy + Clone + Pod + Zeroable> Iterator for DequeIterator<'a, T> {
+impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iterator
+    for DequeIterator<'a, T, MAX_SIZE>
+{
     type Item = (usize, &'a T);
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.ptr {
             SENTINEL => None,
             _ => {
-                let ptr = self.ptr as usize;
-                self.ptr = self.nodes[ptr as usize].get_register(NEXT as usize);
-                Some((ptr, self.nodes[ptr as usize].get_value()))
+                let ptr = self.ptr;
+                self.ptr = self.deque.get_next(ptr);
+                Some((ptr as usize, self.deque.get_node(ptr)))
             }
         }
     }
 }
 
-pub struct DequeIteratorMut<'a, T: Default + Copy + Clone + Pod + Zeroable> {
-    nodes: &'a mut [Node<T, 2>],
+pub struct DequeIteratorMut<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> {
+    deque: &'a mut Deque<T, MAX_SIZE>,
     ptr: u32,
 }
 
-impl<'a, T: Default + Copy + Clone + Pod + Zeroable> Iterator for DequeIteratorMut<'a, T> {
+impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iterator
+    for DequeIteratorMut<'a, T, MAX_SIZE>
+{
     type Item = (usize, &'a mut T);
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.ptr {
             SENTINEL => None,
             _ => {
-                let ptr = self.ptr as usize;
-                self.ptr = self.nodes[ptr].get_register(NEXT as usize);
-                Some((ptr, unsafe {
-                    (*self.nodes.as_mut_ptr().add(ptr)).get_value_mut()
+                let ptr = self.ptr;
+                self.ptr = self.deque.get_next(ptr);
+                Some((ptr as usize, unsafe {
+                    (*self.deque.allocator.nodes.as_mut_ptr().add(ptr as usize)).get_value_mut()
                 }))
             }
         }

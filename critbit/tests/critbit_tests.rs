@@ -35,7 +35,10 @@ async fn test_simulate() {
     type CritbitTree = Critbit<Widget, NUM_NODES, MAX_SIZE>;
     let mut buf = vec![0u8; std::mem::size_of::<CritbitTree>()];
     let cbt = CritbitTree::new_from_slice(buf.as_mut_slice());
-    println!("Critbit Memory Size: {}", std::mem::size_of::<CritbitTree>());
+    println!(
+        "Critbit Memory Size: {}",
+        std::mem::size_of::<CritbitTree>()
+    );
     println!("Critbit Capacity: {}", MAX_SIZE - 1);
     let mut rng = thread_rng();
     let mut keys = vec![];

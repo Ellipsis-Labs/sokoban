@@ -4,7 +4,6 @@ use rand::thread_rng;
 use rand::{self, Rng};
 use std::collections::VecDeque;
 
-
 const MAX_SIZE: usize = 256;
 
 #[tokio::test(threaded_scheduler)]
@@ -43,11 +42,7 @@ async fn test_simple() {
         );
     }
 
-    assert_eq!(
-        dll_std.len(),
-        MAX_SIZE - 1_usize,
-        "DLL (std) size is wrong"
-    );
+    assert_eq!(dll_std.len(), MAX_SIZE - 1_usize, "DLL (std) size is wrong");
     assert_eq!(dll.len(), MAX_SIZE - 1_usize, "DLL size is wrong");
 
     for (i, (_p, node)) in dll.iter_mut().enumerate() {

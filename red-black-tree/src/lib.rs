@@ -7,8 +7,15 @@ pub const LEFT: u32 = 0;
 pub const RIGHT: u32 = 1;
 pub const PARENT: u32 = 2;
 pub const COLOR: u32 = 3;
+// Default nodes are conveniently colored black
 pub const BLACK: u32 = 0;
 pub const RED: u32 = 1;
+
+/// Exploits the fact that LEFT and RIGHT are set to 0 and 1 respectively
+#[inline(always)]
+fn opposite(dir: u32) -> u32 {
+    1 - dir
+}
 
 #[repr(C)]
 #[derive(Default, Copy, Clone)]
@@ -49,9 +56,8 @@ pub struct RedBlackTree<
     V: Default + Copy + Clone + Pod + Zeroable,
     const MAX_SIZE: usize,
 > {
-    pub sequence_number: u64,
     pub root: u32,
-    pub allocator: NodeAllocator<RBNode<K, V>, MAX_SIZE, 4>,
+    allocator: NodeAllocator<RBNode<K, V>, MAX_SIZE, 4>,
 }
 
 unsafe impl<
@@ -85,7 +91,6 @@ impl<
 {
     fn default() -> Self {
         RedBlackTree {
-            sequence_number: 0,
             root: SENTINEL,
             allocator: NodeAllocator::<RBNode<K, V>, MAX_SIZE, 4>::default(),
         }
@@ -120,59 +125,64 @@ impl<
         self.allocator.get_mut(node).get_value_mut()
     }
 
-    #[inline]
+    #[inline(always)]
     fn color_red(&mut self, node: u32) {
         if node != SENTINEL {
             self.allocator.set_register(node, RED, COLOR);
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn color_black(&mut self, node: u32) {
         self.allocator.set_register(node, BLACK, COLOR);
     }
 
-    #[inline]
+    #[inline(always)]
     fn is_red(&self, node: u32) -> bool {
         self.allocator.get_register(node, COLOR) == RED
     }
 
-    #[inline]
+    #[inline(always)]
     fn is_black(&self, node: u32) -> bool {
         self.allocator.get_register(node, COLOR) == BLACK
     }
 
-    #[inline]
+    #[inline(always)]
     fn get_child(&self, node: u32, dir: u32) -> u32 {
         self.allocator.get_register(node, dir)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn is_leaf(&self, node: u32) -> bool {
         self.get_left(node) == SENTINEL && self.get_right(node) == SENTINEL
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_left(&self, node: u32) -> u32 {
         self.allocator.get_register(node, LEFT)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_right(&self, node: u32) -> u32 {
         self.allocator.get_register(node, RIGHT)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_color(&self, node: u32) -> u32 {
         self.allocator.get_register(node, COLOR)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_parent(&self, node: u32) -> u32 {
         self.allocator.get_register(node, PARENT)
     }
 
-    #[inline]
+    #[inline(always)]
+    pub fn connect(&mut self, parent: u32, child: u32, dir: u32) {
+        self.allocator.connect(parent, child, dir, PARENT);
+    }
+
+    #[inline(always)]
     fn child_dir(&self, parent: u32, child: u32) -> u32 {
         let left = self.get_left(parent);
         let right = self.get_right(parent);
@@ -193,22 +203,18 @@ impl<
             LEFT | RIGHT => {}
             _ => return None,
         }
-        let sibling_index = self.get_child(parent_index, 1 - dir);
+        let sibling_index = self.get_child(parent_index, opposite(dir));
         if sibling_index == SENTINEL {
             return None;
         }
         let child_index = self.get_child(sibling_index, dir);
-        self.allocator
-            .connect(sibling_index, parent_index, dir, PARENT);
-        self.allocator
-            .connect(parent_index, child_index, 1 - dir, PARENT);
+        self.connect(sibling_index, parent_index, dir);
+        self.connect(parent_index, child_index, opposite(dir));
         if grandparent_index != SENTINEL {
             if self.get_left(grandparent_index) == parent_index {
-                self.allocator
-                    .connect(grandparent_index, sibling_index, LEFT, PARENT);
+                self.connect(grandparent_index, sibling_index, LEFT);
             } else if self.get_right(grandparent_index) == parent_index {
-                self.allocator
-                    .connect(grandparent_index, sibling_index, RIGHT, PARENT);
+                self.connect(grandparent_index, sibling_index, RIGHT);
             } else {
                 return None;
             }
@@ -228,14 +234,14 @@ impl<
                 break;
             }
             let dir = self.child_dir(grandparent, parent);
-            let uncle = self.get_child(grandparent, 1 - dir);
+            let uncle = self.get_child(grandparent, opposite(dir));
             if self.is_red(uncle) {
                 self.color_black(uncle);
                 self.color_black(parent);
                 self.color_red(grandparent);
                 node = grandparent;
             } else {
-                if self.child_dir(parent, node) == 1 - dir {
+                if self.child_dir(parent, node) == opposite(dir) {
                     self.rotate_dir(node, dir);
                     node = parent;
                 }
@@ -243,7 +249,7 @@ impl<
                 grandparent = self.get_parent(parent);
                 self.color_black(parent);
                 self.color_red(grandparent);
-                self.rotate_dir(grandparent, 1 - dir);
+                self.rotate_dir(grandparent, opposite(dir));
             }
         }
         self.color_black(self.root);
@@ -254,13 +260,12 @@ impl<
         let mut reference_node = self.root;
         let new_node = RBNode::<K, V>::new(key, value);
         if reference_node == SENTINEL {
-            self.sequence_number += 1;
             let node_index = self.allocator.add_node(new_node);
             self.root = node_index;
             return Some(node_index);
         }
         loop {
-            let ref_value = self.allocator.get(reference_node).get_value().key;
+            let ref_value = self.get_node(reference_node).key;
             let (target, dir) = if key < ref_value {
                 (self.get_left(reference_node), LEFT)
             } else if key > ref_value {
@@ -273,11 +278,9 @@ impl<
                 if self.size() >= MAX_SIZE - 1 {
                     return None;
                 }
-                self.sequence_number += 1;
                 let node_index = self.allocator.add_node(new_node);
                 self.color_red(node_index);
-                self.allocator
-                    .connect(reference_node, node_index, dir, PARENT);
+                self.connect(reference_node, node_index, dir);
                 let grandparent = self.get_parent(reference_node);
                 if grandparent != SENTINEL {
                     self.fix_insert(node_index);
@@ -295,7 +298,7 @@ impl<
         while node_index != self.root && self.is_black(node_index) {
             let parent = self.get_parent(node_index);
             let dir = self.child_dir(parent, node_index);
-            let mut sibling = self.get_child(parent, 1 - dir);
+            let mut sibling = self.get_child(parent, opposite(dir));
             if self.is_red(sibling) {
                 self.color_black(sibling);
                 self.color_red(parent);
@@ -309,7 +312,7 @@ impl<
                 if self.is_black(self.get_right(sibling)) {
                     self.color_black(self.get_left(sibling));
                     self.color_red(sibling);
-                    self.rotate_dir(sibling, 1 - dir);
+                    self.rotate_dir(sibling, opposite(dir));
                     sibling = self.get_right(self.get_parent(node_index));
                 }
 
@@ -359,13 +362,16 @@ impl<
                     let min_right_child = self.get_right(min_right);
                     is_black = self.is_black(min_right);
                     if min_right == right {
-                        assert!(min_right_child == SENTINEL || self.get_parent(min_right_child) == right);
+                        assert!(
+                            min_right_child == SENTINEL
+                                || self.get_parent(min_right_child) == right
+                        );
                     } else {
                         self.transplant(min_right, min_right_child);
-                        self.allocator.connect(min_right, right, RIGHT, PARENT);
+                        self.connect(min_right, right, RIGHT);
                     }
                     self.transplant(ref_node_index, min_right);
-                    self.allocator.connect(min_right, left, LEFT, PARENT);
+                    self.connect(min_right, left, LEFT);
                     if self.is_red(ref_node_index) {
                         self.color_red(min_right)
                     } else {
@@ -384,7 +390,6 @@ impl<
                         return None;
                     }
                 }
-                self.sequence_number += 1;
                 return Some(ref_value);
             };
             if target == SENTINEL {
@@ -403,7 +408,7 @@ impl<
             return;
         }
         let dir = self.child_dir(parent, target);
-        self.allocator.connect(parent, source, dir, PARENT);
+        self.connect(parent, source, dir);
     }
 
     pub fn get(&self, key: &K) -> Option<&V> {

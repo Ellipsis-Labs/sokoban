@@ -76,12 +76,18 @@ pub struct NodeAllocator<
     const MAX_SIZE: usize,
     const NUM_REGISTERS: usize,
 > {
-    /// Size of the allocator
+    /// Size of the allocator. The max value this can take is `MAX_SIZE - 1` because the 0-index is always
+    /// the SENTINEL
     pub size: u64,
-    /// Furthest index of the allocator
+    /// Furthest index of the allocator. When this value reaches `MAX_SIZE` this indicates taht all of the nodes
+    /// has been used at least once and new allocated indicies must be pulled from the free list.
     bump_index: u32,
-    /// Buffer index of the first element in the free list
+    /// Buffer index of the first element in the free list. The free list is a linked list of nodes that
+    /// unallocated. The free list operates like a stack. When nodes are removed from the allocator,
+    /// that node becomes the new free list head. When new nodes are added, the index is pull from the
+    /// `free_list_head`
     free_list_head: u32,
+    /// Nodes containing data, with `NUM_REGISTERS` registers that can store arbitrary data  
     pub nodes: [Node<T, NUM_REGISTERS>; MAX_SIZE],
 }
 
@@ -93,7 +99,7 @@ unsafe impl<
 {
 }
 unsafe impl<
-T: Default + Copy + Clone + Pod + Zeroable,
+        T: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
         const NUM_REGISTERS: usize,
     > Pod for NodeAllocator<T, MAX_SIZE, NUM_REGISTERS>
@@ -101,7 +107,7 @@ T: Default + Copy + Clone + Pod + Zeroable,
 }
 
 impl<
-T: Default + Copy + Clone + Pod + Zeroable,
+        T: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
         const NUM_REGISTERS: usize,
     > ZeroCopy for NodeAllocator<T, MAX_SIZE, NUM_REGISTERS>
@@ -109,7 +115,7 @@ T: Default + Copy + Clone + Pod + Zeroable,
 }
 
 impl<
-T: Default + Copy + Clone + Pod + Zeroable,
+        T: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
         const NUM_REGISTERS: usize,
     > Default for NodeAllocator<T, MAX_SIZE, NUM_REGISTERS>
@@ -125,7 +131,7 @@ T: Default + Copy + Clone + Pod + Zeroable,
 }
 
 impl<
-T: Default + Copy + Clone + Pod + Zeroable,
+        T: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
         const NUM_REGISTERS: usize,
     > NodeAllocator<T, MAX_SIZE, NUM_REGISTERS>
@@ -213,7 +219,9 @@ T: Default + Copy + Clone + Pod + Zeroable,
 
     #[inline(always)]
     pub fn set_register(&mut self, i: u32, value: u32, r_i: u32) {
-        self.get_mut(i).set_register(r_i as usize, value);
+        if i != SENTINEL {
+            self.get_mut(i).set_register(r_i as usize, value);
+        }
     }
 
     #[inline(always)]

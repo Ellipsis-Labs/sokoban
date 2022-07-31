@@ -30,9 +30,7 @@ pub struct Critbit<
     const NUM_NODES: usize,
     const MAX_SIZE: usize,
 > {
-    pub sequence_number: u64,
     pub root: u32,
-    pub num_leaves: u32,
     node_allocator: NodeAllocator<CritbitNode, NUM_NODES, 4>,
     leaves: NodeAllocator<V, MAX_SIZE, 1>,
 }
@@ -58,9 +56,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     fn default() -> Self {
         assert!(NUM_NODES >= 2 * MAX_SIZE);
         Self {
-            sequence_number: 0,
             root: SENTINEL,
-            num_leaves: 0,
             node_allocator: NodeAllocator::<CritbitNode, NUM_NODES, 4>::default(),
             leaves: NodeAllocator::<V, MAX_SIZE, 1>::default(),
         }
@@ -82,7 +78,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     }
 
     pub fn size(&self) -> usize {
-        self.num_leaves as usize
+        self.leaves.size as usize
     }
 
     pub fn get_leaf(&self, leaf_index: u32) -> &V {
@@ -259,12 +255,9 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     }
 
     pub fn insert(&mut self, key: u128, value: V) -> Option<(u32, u32)> {
-        assert!(self.num_leaves as usize == self.leaves.size as usize);
         if self.root == SENTINEL {
             let (node_index, leaf_index) = self.add_leaf(key, value);
             self.root = node_index;
-            self.sequence_number += 1;
-            self.num_leaves += 1;
             return Some((self.root, leaf_index));
         }
         let mut node_index = self.root;
@@ -291,14 +284,11 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
             } else {
                 self.replace_node(node_index, &new_node, node_leaf_index, moved_node_index);
             }
-            self.sequence_number += 1;
-            self.num_leaves += 1;
             return Some((node_leaf_index, leaf_index));
         }
     }
 
     pub fn remove(&mut self, key: u128) -> Option<V> {
-        assert!(self.num_leaves as usize == self.leaves.size as usize);
         let nsize = self.node_allocator.size;
         let lsize = self.leaves.size;
         let mut parent = self.root;
@@ -313,8 +303,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
             let leaf = self.get_node(parent);
             if leaf.key == key {
                 self.root = SENTINEL;
-                assert!(self.num_leaves == 1);
-                self.num_leaves = 0;
+                assert!(self.size() == 1);
                 return Some(self.remove_leaf(parent));
             } else {
                 return None;
@@ -341,8 +330,6 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         };
         let leaf = self.remove_leaf(child);
         self.migrate(sibling, parent);
-        self.num_leaves -= 1;
-        self.sequence_number += 1;
         assert!(nsize - self.node_allocator.size == 2);
         assert!(lsize - self.leaves.size == 1);
         Some(leaf)

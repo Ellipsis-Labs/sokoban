@@ -33,7 +33,7 @@ impl Widget {
 async fn test_simulate() {
     type RBTree = RedBlackTree<u128, Widget, MAX_SIZE>;
     let mut buf = vec![0u8; std::mem::size_of::<RBTree>()];
-    let rbt = RBTree::new_from_slice(buf.as_mut_slice()); 
+    let rbt = RBTree::new_from_slice(buf.as_mut_slice());
     println!("RBT Memory Size: {}", std::mem::size_of::<RBTree>());
     println!("RBT Capacity: {}", MAX_SIZE - 1);
     let mut rng = thread_rng();
