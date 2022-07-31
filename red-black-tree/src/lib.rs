@@ -356,12 +356,12 @@ impl<
                     assert!(self.get_parent(self.get_left(ref_node_index)) == ref_node_index);
                     assert!(self.get_parent(self.get_right(ref_node_index)) == ref_node_index);
                     let min_right = self.find_min(right);
-                    let x = self.get_right(min_right);
+                    let min_right_child = self.get_right(min_right);
                     is_black = self.is_black(min_right);
                     if min_right == right {
-                        assert!(x == SENTINEL || self.get_parent(x) == right);
+                        assert!(min_right_child == SENTINEL || self.get_parent(min_right_child) == right);
                     } else {
-                        self.transplant(min_right, x);
+                        self.transplant(min_right, min_right_child);
                         self.allocator.connect(min_right, right, RIGHT, PARENT);
                     }
                     self.transplant(ref_node_index, min_right);
@@ -373,11 +373,10 @@ impl<
                     }
                     self.allocator.clear_register(ref_node_index, LEFT);
                     self.allocator.clear_register(ref_node_index, RIGHT);
-                    self.allocator.clear_register(ref_node_index, PARENT);
-                    (x, ref_node_index)
+                    (min_right_child, ref_node_index)
                 };
+                self.allocator.clear_register(ref_node_index, PARENT);
                 assert!(self.is_leaf(delete_node_index));
-
                 self.allocator.clear_register(delete_node_index, COLOR);
                 self.allocator.remove_node(delete_node_index);
                 if is_black {

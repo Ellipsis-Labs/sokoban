@@ -6,7 +6,7 @@ use rand::{self, Rng};
 use red_black_tree::*;
 use std::collections::BTreeMap;
 
-const MAX_SIZE: usize = 20000;
+const MAX_SIZE: usize = 20001;
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, PartialEq)]
@@ -34,7 +34,8 @@ async fn test_simulate() {
     type RBTree = RedBlackTree<u128, Widget, MAX_SIZE>;
     let mut buf = vec![0u8; std::mem::size_of::<RBTree>()];
     let rbt = RBTree::new_from_slice(buf.as_mut_slice()); 
-    println!("Size: {}", std::mem::size_of::<RBTree>());
+    println!("RBT Memory Size: {}", std::mem::size_of::<RBTree>());
+    println!("RBT Capacity: {}", MAX_SIZE - 1);
     let mut rng = thread_rng();
     let mut keys = vec![];
     let mut map = Box::new(BTreeMap::new());

@@ -49,7 +49,7 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         if self.head == SENTINEL {
             return None;
         }
-        Some(self.get(self.head).get_value())
+        Some(self.get_node(self.head))
     }
 
     pub fn back(&self) -> Option<&T> {
@@ -59,9 +59,17 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         Some(self.allocator.get(self.tail).get_value())
     }
 
+    pub fn get_next(&self, index: u32) -> u32 {
+        self.allocator.get_register(index, NEXT)
+    }
+
+    pub fn get_prev(&self, index: u32) -> u32 {
+        self.allocator.get_register(index, PREV)
+    }
+
     #[inline(always)]
-    fn get(&self, i: u32) -> &Node<T, 2> {
-        self.allocator.get(i)
+    fn get_node(&self, i: u32) -> &T {
+        self.allocator.get(i).get_value()
     }
 
     pub fn push_back(&mut self, node: T) {
@@ -92,8 +100,7 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         if self.head == SENTINEL {
             return None;
         }
-        let head_node = self.get(self.head);
-        let new_head = head_node.get_register(NEXT as usize);
+        let new_head = self.get_next(self.head);
         let res = self.allocator.remove_node(self.head).unwrap();
         self.head = new_head;
         self.sequence_number += 1;
@@ -104,8 +111,7 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         if self.tail == SENTINEL {
             return None;
         }
-        let tail_node = self.get(self.tail);
-        let new_tail = tail_node.get_register(PREV as usize);
+        let new_tail = self.get_prev(self.tail);
         let res = self.allocator.remove_node(self.tail).unwrap();
         self.tail = new_tail;
         self.sequence_number += 1;
@@ -114,10 +120,9 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
 
     pub fn remove(&mut self, i: usize) -> Option<T> {
         let (left, right, value) = {
-            let node = self.get(i as u32);
-            let value = *node.get_value();
-            let left = node.get_register(PREV as usize);
-            let right = node.get_register(NEXT as usize);
+            let value = *self.get_node(i as u32);
+            let left = self.get_prev(i as u32);
+            let right = self.get_next(i as u32);
             (left, right, value)
         };
         self.allocator.clear_register(i as u32, PREV);

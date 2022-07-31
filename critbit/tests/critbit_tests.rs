@@ -6,7 +6,7 @@ use rand::thread_rng;
 use rand::{self, Rng};
 use std::collections::BTreeMap;
 
-const MAX_SIZE: usize = 20000;
+const MAX_SIZE: usize = 20001;
 const NUM_NODES: usize = 2 * MAX_SIZE;
 
 #[repr(C)]
@@ -35,7 +35,8 @@ async fn test_simulate() {
     type CritbitTree = Critbit<Widget, NUM_NODES, MAX_SIZE>;
     let mut buf = vec![0u8; std::mem::size_of::<CritbitTree>()];
     let cbt = CritbitTree::new_from_slice(buf.as_mut_slice());
-    println!("Size: {}", std::mem::size_of::<CritbitTree>());
+    println!("Critbit Memory Size: {}", std::mem::size_of::<CritbitTree>());
+    println!("Critbit Capacity: {}", MAX_SIZE - 1);
     let mut rng = thread_rng();
     let mut keys = vec![];
     let mut s = 0;
@@ -43,9 +44,8 @@ async fn test_simulate() {
     for _ in 0..(MAX_SIZE - 1) {
         let k = rng.gen::<u128>();
         let v = Widget::new_random(&mut rng);
-        match cbt.insert(k, v) {
-            None => assert!(false),
-            _ => {}
+        if cbt.insert(k, v) == None {
+            assert!(false)
         }
         s += 1;
         map.insert(k, v);
@@ -53,9 +53,8 @@ async fn test_simulate() {
     }
 
     for k in keys.iter() {
-        match cbt.remove(*k) {
-            None => assert!(false),
-            _ => {}
+        if cbt.remove(*k) == None {
+            assert!(false)
         }
         s -= 1;
         map.remove(k);
@@ -65,9 +64,8 @@ async fn test_simulate() {
     for _i in 0..(MAX_SIZE - 1) {
         let k = rng.gen::<u128>();
         let v = Widget::new_random(&mut rng);
-        match cbt.insert(k, v) {
-            None => assert!(false),
-            _ => {}
+        if cbt.insert(k, v) == None {
+            assert!(false)
         }
         s += 1;
         map.insert(k, v);

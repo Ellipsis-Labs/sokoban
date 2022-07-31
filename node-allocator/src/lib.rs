@@ -69,6 +69,7 @@ impl<T: Copy + Clone + Pod + Zeroable + Default, const NUM_REGISTERS: usize>
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub struct NodeAllocator<
     T: Default + Copy + Clone + Pod + Zeroable,
@@ -151,6 +152,8 @@ T: Default + Copy + Clone + Pod + Zeroable,
         &mut self.nodes[i as usize]
     }
 
+    /// Adds a new node to the allocator. The function returns the current pointer
+    /// to the free list, where the new node is inserted
     pub fn add_node(&mut self, node: T) -> u32 {
         let i = self.free_list_head;
         if self.free_list_head == self.bump_index {
@@ -168,6 +171,8 @@ T: Default + Copy + Clone + Pod + Zeroable,
         i
     }
 
+    /// Removes the node at index `i` from the alloctor and adds the index to the free list
+    /// When deleting nodes, you MUST clear all registers prior to calling `remove_node`
     pub fn remove_node(&mut self, i: u32) -> Option<&T> {
         if i == SENTINEL {
             return None;
@@ -182,11 +187,11 @@ T: Default + Copy + Clone + Pod + Zeroable,
     #[inline(always)]
     pub fn disconnect(&mut self, i: u32, j: u32, r_i: u32, r_j: u32) {
         if i != SENTINEL {
-            assert!(j == self.get_register(i, r_i));
+            assert!(j == self.get_register(i, r_i), "Nodes are not connected");
             self.clear_register(i, r_i);
         }
         if j != SENTINEL {
-            assert!(i == self.get_register(j, r_j));
+            assert!(i == self.get_register(j, r_j), "Nodes are not connected");
             self.clear_register(j, r_j);
         }
     }
