@@ -38,7 +38,7 @@ pub struct Node<T: Copy + Clone + Pod + Zeroable + Default, const NUM_REGISTERS:
 }
 ```
 
-The templated `NodeAllocator` object is flexible primitive data strucutre for implementing more complex types. Here's how one might use the `NodeAllocator` to implement a doubly-linked list:
+The templated `NodeAllocator` object is flexible primitive data structure for implementing more complex types. Here's how one might use the `NodeAllocator` to implement a doubly-linked list:
 
 ```
 // Register aliases
