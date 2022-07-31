@@ -6,41 +6,41 @@ pub const PREV: u32 = 0;
 pub const NEXT: u32 = 1;
 
 #[derive(Copy, Clone)]
-pub struct Deque<const MAX_SIZE: usize, T: Default + Copy + Clone + Pod + Zeroable> {
+pub struct Deque<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> {
     pub sequence_number: u64,
     pub head: u32,
     pub tail: u32,
-    allocator: NodeAllocator<MAX_SIZE, 2, T>,
+    allocator: NodeAllocator<T, MAX_SIZE, 2>,
 }
 
-unsafe impl<const MAX_SIZE: usize, T: Default + Copy + Clone + Pod + Zeroable> Zeroable
-    for Deque<MAX_SIZE, T>
+unsafe impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Zeroable
+    for Deque<T, MAX_SIZE>
 {
 }
-unsafe impl<const MAX_SIZE: usize, T: Default + Copy + Clone + Pod + Zeroable> Pod
-    for Deque<MAX_SIZE, T>
-{
-}
-
-impl<const MAX_SIZE: usize, T: Default + Copy + Clone + Pod + Zeroable> ZeroCopy
-    for Deque<MAX_SIZE, T>
+unsafe impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Pod
+    for Deque<T, MAX_SIZE>
 {
 }
 
-impl<const MAX_SIZE: usize, T: Default + Copy + Clone + Pod + Zeroable> Default
-    for Deque<MAX_SIZE, T>
+impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> ZeroCopy
+    for Deque<T, MAX_SIZE>
+{
+}
+
+impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Default
+    for Deque<T, MAX_SIZE>
 {
     fn default() -> Self {
         Deque {
             sequence_number: 0,
             head: SENTINEL,
             tail: SENTINEL,
-            allocator: NodeAllocator::<MAX_SIZE, 2, T>::default(),
+            allocator: NodeAllocator::<T, MAX_SIZE, 2>::default(),
         }
     }
 }
 
-impl<const MAX_SIZE: usize, T: Default + Copy + Clone + Pod + Zeroable> Deque<MAX_SIZE, T> {
+impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T, MAX_SIZE> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -60,7 +60,7 @@ impl<const MAX_SIZE: usize, T: Default + Copy + Clone + Pod + Zeroable> Deque<MA
     }
 
     #[inline(always)]
-    fn get(&self, i: u32) -> &Node<2, T> {
+    fn get(&self, i: u32) -> &Node<T, 2> {
         self.allocator.get(i)
     }
 
@@ -158,7 +158,7 @@ impl<const MAX_SIZE: usize, T: Default + Copy + Clone + Pod + Zeroable> Deque<MA
 }
 
 pub struct DequeIterator<'a, T: Default + Copy + Clone + Pod + Zeroable> {
-    nodes: &'a [Node<2, T>],
+    nodes: &'a [Node<T, 2>],
     ptr: u32,
 }
 
@@ -178,7 +178,7 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable> Iterator for DequeIterator<
 }
 
 pub struct DequeIteratorMut<'a, T: Default + Copy + Clone + Pod + Zeroable> {
-    nodes: &'a mut [Node<2, T>],
+    nodes: &'a mut [Node<T, 2>],
     ptr: u32,
 }
 

@@ -33,7 +33,6 @@ unsafe impl<
 {
 }
 
-
 impl<
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
@@ -46,58 +45,58 @@ impl<
 
 #[derive(Copy, Clone)]
 pub struct RedBlackTree<
-    const MAX_SIZE: usize,
     K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
+    const MAX_SIZE: usize,
 > {
     pub sequence_number: u64,
     pub root: u32,
-    pub allocator: NodeAllocator<MAX_SIZE, 4, RBNode<K, V>>,
+    pub allocator: NodeAllocator<RBNode<K, V>, MAX_SIZE, 4>,
 }
 
 unsafe impl<
-        const MAX_SIZE: usize,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-    > Zeroable for RedBlackTree<MAX_SIZE, K, V>
+        const MAX_SIZE: usize,
+    > Zeroable for RedBlackTree<K, V, MAX_SIZE>
 {
 }
 unsafe impl<
-        const MAX_SIZE: usize,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-    > Pod for RedBlackTree<MAX_SIZE, K, V>
+        const MAX_SIZE: usize,
+    > Pod for RedBlackTree<K, V, MAX_SIZE>
 {
 }
 
 impl<
-        const MAX_SIZE: usize,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-    > ZeroCopy for RedBlackTree<MAX_SIZE, K, V>
+        const MAX_SIZE: usize,
+    > ZeroCopy for RedBlackTree<K, V, MAX_SIZE>
 {
 }
 
 impl<
-        const MAX_SIZE: usize,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-    > Default for RedBlackTree<MAX_SIZE, K, V>
+        const MAX_SIZE: usize,
+    > Default for RedBlackTree<K, V, MAX_SIZE>
 {
     fn default() -> Self {
         RedBlackTree {
             sequence_number: 0,
             root: SENTINEL,
-            allocator: NodeAllocator::<MAX_SIZE, 4, RBNode<K, V>>::default(),
+            allocator: NodeAllocator::<RBNode<K, V>, MAX_SIZE, 4>::default(),
         }
     }
 }
 
 impl<
-        const MAX_SIZE: usize,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-    > RedBlackTree<MAX_SIZE, K, V>
+        const MAX_SIZE: usize,
+    > RedBlackTree<K, V, MAX_SIZE>
 {
     pub fn size(&self) -> usize {
         self.allocator.size as usize
@@ -121,59 +120,59 @@ impl<
         self.allocator.get_mut(node).get_value_mut()
     }
 
-    #[inline(always)]
+    #[inline]
     fn color_red(&mut self, node: u32) {
         if node != SENTINEL {
             self.allocator.set_register(node, RED, COLOR);
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn color_black(&mut self, node: u32) {
         self.allocator.set_register(node, BLACK, COLOR);
     }
 
-    #[inline(always)]
+    #[inline]
     fn is_red(&self, node: u32) -> bool {
         self.allocator.get_register(node, COLOR) == RED
     }
 
-    #[inline(always)]
+    #[inline]
     fn is_black(&self, node: u32) -> bool {
         self.allocator.get_register(node, COLOR) == BLACK
     }
 
-    #[inline(always)]
+    #[inline]
     fn get_child(&self, node: u32, dir: u32) -> u32 {
         self.allocator.get_register(node, dir)
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn is_leaf(&self, node: u32) -> bool {
         self.get_left(node) == SENTINEL && self.get_right(node) == SENTINEL
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn get_left(&self, node: u32) -> u32 {
         self.allocator.get_register(node, LEFT)
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn get_right(&self, node: u32) -> u32 {
         self.allocator.get_register(node, RIGHT)
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn get_color(&self, node: u32) -> u32 {
         self.allocator.get_register(node, COLOR)
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn get_parent(&self, node: u32) -> u32 {
         self.allocator.get_register(node, PARENT)
     }
 
-    #[inline(always)]
+    #[inline]
     fn child_dir(&self, parent: u32, child: u32) -> u32 {
         let left = self.get_left(parent);
         let right = self.get_right(parent);
@@ -188,7 +187,6 @@ impl<
         }
     }
 
-    #[inline(always)]
     fn rotate_dir(&mut self, parent_index: u32, dir: u32) -> Option<u32> {
         let grandparent_index = self.get_parent(parent_index);
         match dir {
@@ -487,10 +485,10 @@ impl<
 }
 
 impl<
-        const MAX_SIZE: usize,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-    > Index<&K> for RedBlackTree<MAX_SIZE, K, V>
+        const MAX_SIZE: usize,
+    > Index<&K> for RedBlackTree<K, V, MAX_SIZE>
 {
     type Output = V;
 
@@ -503,7 +501,7 @@ impl<
         const MAX_SIZE: usize,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-    > IndexMut<&K> for RedBlackTree<MAX_SIZE, K, V>
+    > IndexMut<&K> for RedBlackTree<K, V, MAX_SIZE>
 {
     fn index_mut(&mut self, index: &K) -> &mut Self::Output {
         self.get_mut(index).unwrap()

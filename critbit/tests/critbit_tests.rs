@@ -1,40 +1,26 @@
 use bytemuck::Pod;
 use bytemuck::Zeroable;
-use bytemuck::cast_slice_mut;
 use critbit::*;
-use node_allocator::*;
 use rand::rngs::ThreadRng;
 use rand::thread_rng;
 use rand::{self, Rng};
 use std::collections::BTreeMap;
 
-const MAX_SIZE: usize = 2000;
-const MAX_LEAVES: usize = 1000;
-
-#[tokio::test(threaded_scheduler)]
-async fn test_initialize() {
-    let cbt = Critbit::<MAX_SIZE, MAX_LEAVES, u64>::new();
-
-    assert_eq!(
-        cbt.sequence_number, 0,
-        "Init failed to set sequence properly"
-    );
-
-    assert_eq!(cbt.root, SENTINEL, "Init failed to set head properly");
-}
+const MAX_SIZE: usize = 100000;
+const NUM_NODES: usize = 2 * MAX_SIZE;
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, PartialEq)]
-struct Order {
+struct Widget {
     a: u128,
     b: u128,
     size: u64,
 }
 
-unsafe impl Zeroable for Order {}
-unsafe impl Pod for Order {}
+unsafe impl Zeroable for Widget {}
+unsafe impl Pod for Widget {}
 
-impl Order {
+impl Widget {
     pub fn new_random(r: &mut ThreadRng) -> Self {
         Self {
             a: r.gen::<u128>(),
@@ -46,18 +32,17 @@ impl Order {
 
 #[tokio::test(threaded_scheduler)]
 async fn test_simulate() {
-    type CritbitTree = Critbit<MAX_SIZE, MAX_LEAVES, Order>;
-    let mut aligned_buf = vec![0u8; std::mem::size_of::<CritbitTree>()];
-    let bytes: &mut [u8] = cast_slice_mut(aligned_buf.as_mut_slice());
-    let cbt = CritbitTree::new_from_slice(bytes);
+    type CritbitTree = Critbit<Widget, NUM_NODES, MAX_SIZE>;
+    let mut buf = vec![0u8; std::mem::size_of::<CritbitTree>()];
+    let cbt = CritbitTree::new_from_slice(buf.as_mut_slice());
     println!("Size: {}", std::mem::size_of::<CritbitTree>());
     let mut rng = thread_rng();
     let mut keys = vec![];
     let mut s = 0;
     let mut map = BTreeMap::new();
-    for _ in 0..(MAX_LEAVES - 1) {
+    for _ in 0..(MAX_SIZE - 1) {
         let k = rng.gen::<u128>();
-        let v = Order::new_random(&mut rng);
+        let v = Widget::new_random(&mut rng);
         match cbt.insert(k, v) {
             None => assert!(false),
             _ => {}
@@ -77,9 +62,9 @@ async fn test_simulate() {
     }
     keys = vec![];
 
-    for _i in 0..(MAX_LEAVES - 1) {
+    for _i in 0..(MAX_SIZE - 1) {
         let k = rng.gen::<u128>();
-        let v = Order::new_random(&mut rng);
+        let v = Widget::new_random(&mut rng);
         match cbt.insert(k, v) {
             None => assert!(false),
             _ => {}
@@ -93,11 +78,11 @@ async fn test_simulate() {
         assert!(s == cbt.size());
         let sample = rng.gen::<f64>();
         if sample < 0.33 {
-            if cbt.size() >= MAX_LEAVES - 1 {
+            if cbt.size() >= MAX_SIZE - 1 {
                 continue;
             }
             let k = rng.gen::<u128>();
-            let v = Order::new_random(&mut rng);
+            let v = Widget::new_random(&mut rng);
             if cbt.insert(k, v) == None {
                 assert!(false);
             }
@@ -120,7 +105,7 @@ async fn test_simulate() {
             }
             let j = rng.gen_range(0, keys.len());
             let key = keys[j];
-            let v = Order::new_random(&mut rng);
+            let v = Widget::new_random(&mut rng);
             cbt.insert(key, v);
             map.insert(key, v);
         }

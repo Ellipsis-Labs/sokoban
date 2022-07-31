@@ -3,5 +3,6 @@ members = [
     "node-allocator",
     "deque",
     "critbit",
-    "red-black-tree"
+    "red-black-tree",
+    "hash-table"
 ]

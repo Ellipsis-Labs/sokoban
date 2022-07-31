@@ -26,64 +26,49 @@ impl CritbitNode {
 
 #[derive(Copy, Clone)]
 pub struct Critbit<
-    const MAX_SIZE: usize,
-    const MAX_LEAVES: usize,
     V: Default + Copy + Clone + Pod + Zeroable,
+    const NUM_NODES: usize,
+    const MAX_SIZE: usize,
 > {
     pub sequence_number: u64,
     pub root: u32,
     pub num_leaves: u32,
-    node_allocator: NodeAllocator<MAX_SIZE, 4, CritbitNode>,
-    leaves: NodeAllocator<MAX_LEAVES, 1, V>,
+    node_allocator: NodeAllocator<CritbitNode, NUM_NODES, 4>,
+    leaves: NodeAllocator<V, MAX_SIZE, 1>,
 }
 
-unsafe impl<
-        const MAX_SIZE: usize,
-        const MAX_LEAVES: usize,
-        V: Default + Copy + Clone + Pod + Zeroable,
-    > Zeroable for Critbit<MAX_SIZE, MAX_LEAVES, V>
+unsafe impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
+    Zeroable for Critbit<V, NUM_NODES, MAX_SIZE>
 {
 }
 
-unsafe impl<
-        const MAX_SIZE: usize,
-        const MAX_LEAVES: usize,
-        V: Default + Copy + Clone + Pod + Zeroable,
-    > Pod for Critbit<MAX_SIZE, MAX_LEAVES, V>
+unsafe impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
+    Pod for Critbit<V, NUM_NODES, MAX_SIZE>
 {
 }
 
-impl<
-        const MAX_SIZE: usize,
-        const MAX_LEAVES: usize,
-        V: Default + Copy + Clone + Pod + Zeroable,
-    > ZeroCopy for Critbit<MAX_SIZE, MAX_LEAVES, V>
+impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
+    ZeroCopy for Critbit<V, NUM_NODES, MAX_SIZE>
 {
 }
 
-impl<
-        const MAX_SIZE: usize,
-        const MAX_LEAVES: usize,
-        V: Default + Copy + Clone + Pod + Zeroable,
-    > Default for Critbit<MAX_SIZE, MAX_LEAVES, V>
+impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
+    Default for Critbit<V, NUM_NODES, MAX_SIZE>
 {
     fn default() -> Self {
-        assert!(MAX_SIZE >= 2 * MAX_LEAVES);
+        assert!(NUM_NODES >= 2 * MAX_SIZE);
         Self {
             sequence_number: 0,
             root: SENTINEL,
             num_leaves: 0,
-            node_allocator: NodeAllocator::<MAX_SIZE, 4, CritbitNode>::default(),
-            leaves: NodeAllocator::<MAX_LEAVES, 1, V>::default(),
+            node_allocator: NodeAllocator::<CritbitNode, NUM_NODES, 4>::default(),
+            leaves: NodeAllocator::<V, MAX_SIZE, 1>::default(),
         }
     }
 }
 
-impl<
-        const MAX_SIZE: usize,
-        const MAX_LEAVES: usize,
-        V: Default + Copy + Clone + Pod + Zeroable,
-    > Critbit<MAX_SIZE, MAX_LEAVES, V>
+impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
+    Critbit<V, NUM_NODES, MAX_SIZE>
 {
     pub fn new() -> Self {
         Self::default()
@@ -321,7 +306,9 @@ impl<
         let mut is_right: bool;
         if self.is_inner_node(parent) {
             let node = self.get_node(parent);
-            (child, is_right) = self.get_child(node.prefix_len, parent, key);
+            let (c, ir) = self.get_child(node.prefix_len, parent, key);
+            child = c;
+            is_right = ir;
         } else {
             let leaf = self.get_node(parent);
             if leaf.key == key {
@@ -384,11 +371,8 @@ impl<
     }
 }
 
-impl<
-        const MAX_SIZE: usize,
-        const MAX_LEAVES: usize,
-        V: Default + Copy + Clone + Pod + Zeroable,
-    > Index<u128> for Critbit<MAX_SIZE, MAX_LEAVES, V>
+impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
+    Index<u128> for Critbit<V, NUM_NODES, MAX_SIZE>
 {
     type Output = V;
 
@@ -397,11 +381,8 @@ impl<
     }
 }
 
-impl<
-        const MAX_SIZE: usize,
-        const MAX_LEAVES: usize,
-        V: Default + Copy + Clone + Pod + Zeroable,
-    > IndexMut<u128> for Critbit<MAX_SIZE, MAX_LEAVES, V>
+impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
+    IndexMut<u128> for Critbit<V, NUM_NODES, MAX_SIZE>
 {
     fn index_mut(&mut self, index: u128) -> &mut Self::Output {
         self.get_mut(index).unwrap()

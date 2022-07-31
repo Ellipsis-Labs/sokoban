@@ -9,7 +9,7 @@ const MAX_SIZE: usize = 256;
 
 #[tokio::test(threaded_scheduler)]
 async fn test_initialize() {
-    let dll = Deque::<MAX_SIZE, u64>::new();
+    let dll = Deque::<u64, MAX_SIZE>::new();
 
     assert_eq!(
         dll.sequence_number, 0,
@@ -23,7 +23,7 @@ async fn test_initialize() {
 
 #[tokio::test(threaded_scheduler)]
 async fn test_simple() {
-    let mut dll = Deque::<MAX_SIZE, u64>::new();
+    let mut dll = Deque::<u64, MAX_SIZE>::new();
     let mut dll_std = VecDeque::new();
     let mut rng = thread_rng();
 

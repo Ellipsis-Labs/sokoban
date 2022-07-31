@@ -11,15 +11,15 @@ pub const SENTINEL: u32 = 0;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct Node<const NUM_REGISTERS: usize, T: Copy + Clone + Pod + Zeroable + Default> {
+pub struct Node<T: Copy + Clone + Pod + Zeroable + Default, const NUM_REGISTERS: usize> {
     /// Arbitrary registers (generally used for pointers)
     /// Note: Register 0 is ALWAYS used for the free list
     registers: [u32; NUM_REGISTERS],
     value: T,
 }
 
-impl<const NUM_REGISTERS: usize, T: Copy + Clone + Pod + Zeroable + Default> Default
-    for Node<NUM_REGISTERS, T>
+impl<T: Copy + Clone + Pod + Zeroable + Default, const NUM_REGISTERS: usize> Default
+    for Node<T, NUM_REGISTERS>
 {
     fn default() -> Self {
         assert!(NUM_REGISTERS >= 1);
@@ -30,8 +30,8 @@ impl<const NUM_REGISTERS: usize, T: Copy + Clone + Pod + Zeroable + Default> Def
     }
 }
 
-impl<const NUM_REGISTERS: usize, T: Copy + Clone + Pod + Zeroable + Default>
-    Node<NUM_REGISTERS, T>
+impl<T: Copy + Clone + Pod + Zeroable + Default, const NUM_REGISTERS: usize>
+    Node<T, NUM_REGISTERS>
 {
     #[inline(always)]
     pub(crate) fn get_free_list_register(&self) -> u32 {
@@ -71,9 +71,9 @@ impl<const NUM_REGISTERS: usize, T: Copy + Clone + Pod + Zeroable + Default>
 
 #[derive(Copy, Clone)]
 pub struct NodeAllocator<
+    T: Default + Copy + Clone + Pod + Zeroable,
     const MAX_SIZE: usize,
     const NUM_REGISTERS: usize,
-    T: Default + Copy + Clone + Pod + Zeroable,
 > {
     /// Size of the allocator
     pub size: u64,
@@ -81,53 +81,53 @@ pub struct NodeAllocator<
     bump_index: u32,
     /// Buffer index of the first element in the free list
     free_list_head: u32,
-    pub nodes: [Node<NUM_REGISTERS, T>; MAX_SIZE],
+    pub nodes: [Node<T, NUM_REGISTERS>; MAX_SIZE],
 }
 
 unsafe impl<
+        T: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
         const NUM_REGISTERS: usize,
-        T: Default + Copy + Clone + Pod + Zeroable,
-    > Zeroable for NodeAllocator<MAX_SIZE, NUM_REGISTERS, T>
+    > Zeroable for NodeAllocator<T, MAX_SIZE, NUM_REGISTERS>
 {
 }
 unsafe impl<
+T: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
         const NUM_REGISTERS: usize,
-        T: Default + Copy + Clone + Pod + Zeroable,
-    > Pod for NodeAllocator<MAX_SIZE, NUM_REGISTERS, T>
+    > Pod for NodeAllocator<T, MAX_SIZE, NUM_REGISTERS>
 {
 }
 
 impl<
+T: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
         const NUM_REGISTERS: usize,
-        T: Default + Copy + Clone + Pod + Zeroable,
-    > ZeroCopy for NodeAllocator<MAX_SIZE, NUM_REGISTERS, T>
+    > ZeroCopy for NodeAllocator<T, MAX_SIZE, NUM_REGISTERS>
 {
 }
 
 impl<
+T: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
         const NUM_REGISTERS: usize,
-        T: Default + Copy + Clone + Pod + Zeroable,
-    > Default for NodeAllocator<MAX_SIZE, NUM_REGISTERS, T>
+    > Default for NodeAllocator<T, MAX_SIZE, NUM_REGISTERS>
 {
     fn default() -> Self {
         NodeAllocator {
             size: 0,
             bump_index: 1,
             free_list_head: 1,
-            nodes: [Node::<NUM_REGISTERS, T>::default(); MAX_SIZE],
+            nodes: [Node::<T, NUM_REGISTERS>::default(); MAX_SIZE],
         }
     }
 }
 
 impl<
+T: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
         const NUM_REGISTERS: usize,
-        T: Default + Copy + Clone + Pod + Zeroable,
-    > NodeAllocator<MAX_SIZE, NUM_REGISTERS, T>
+    > NodeAllocator<T, MAX_SIZE, NUM_REGISTERS>
 {
     pub fn new() -> Self {
         Self::default()
@@ -142,12 +142,12 @@ impl<
     }
 
     #[inline(always)]
-    pub fn get(&self, i: u32) -> &Node<NUM_REGISTERS, T> {
+    pub fn get(&self, i: u32) -> &Node<T, NUM_REGISTERS> {
         &self.nodes[i as usize]
     }
 
     #[inline(always)]
-    pub fn get_mut(&mut self, i: u32) -> &mut Node<NUM_REGISTERS, T> {
+    pub fn get_mut(&mut self, i: u32) -> &mut Node<T, NUM_REGISTERS> {
         &mut self.nodes[i as usize]
     }
 
