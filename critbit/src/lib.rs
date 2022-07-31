@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use node_allocator::{NodeAllocator, SENTINEL};
+use node_allocator::{NodeAllocator, ZeroCopy, SENTINEL};
 use std::ops::{Index, IndexMut};
 
 // Register aliases
@@ -57,6 +57,14 @@ impl<
         const MAX_SIZE: usize,
         const MAX_LEAVES: usize,
         V: Default + Copy + Clone + Pod + Zeroable,
+    > ZeroCopy for Critbit<MAX_SIZE, MAX_LEAVES, V>
+{
+}
+
+impl<
+        const MAX_SIZE: usize,
+        const MAX_LEAVES: usize,
+        V: Default + Copy + Clone + Pod + Zeroable,
     > Default for Critbit<MAX_SIZE, MAX_LEAVES, V>
 {
     fn default() -> Self {
@@ -79,6 +87,13 @@ impl<
 {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn new_from_slice(slice: &mut [u8]) -> &mut Self {
+        let tree = Self::load_mut_bytes(slice).unwrap();
+        tree.node_allocator.init_default();
+        tree.leaves.init_default();
+        tree
     }
 
     pub fn size(&self) -> usize {
@@ -222,12 +237,12 @@ impl<
         let mut node_index = self.root;
         loop {
             let node = self.get_node(node_index);
-            if !self.is_inner_node(node_index)  {
+            if !self.is_inner_node(node_index) {
                 if node.key == key {
                     let leaf_index = self.get_leaf_index(node_index);
                     return Some(&self.get_leaf(leaf_index));
                 } else {
-                    return None
+                    return None;
                 }
             }
             let shared_prefix_len = (node.key ^ key).leading_zeros() as u64;
@@ -242,12 +257,12 @@ impl<
         let mut node_index = self.root;
         loop {
             let node = self.get_node(node_index);
-            if !self.is_inner_node(node_index)  {
+            if !self.is_inner_node(node_index) {
                 if node.key == key {
                     let leaf_index = self.get_leaf_index(node_index);
                     return Some(self.get_leaf_mut(leaf_index));
                 } else {
-                    return None
+                    return None;
                 }
             }
             let shared_prefix_len = (node.key ^ key).leading_zeros() as u64;

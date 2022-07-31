@@ -1,6 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use node_allocator::{Node, NodeAllocator, SENTINEL};
-
+use node_allocator::{Node, NodeAllocator, ZeroCopy, SENTINEL};
 
 // Register aliases
 pub const PREV: u32 = 0;
@@ -19,6 +18,11 @@ unsafe impl<const MAX_SIZE: usize, T: Default + Copy + Clone + Pod + Zeroable> Z
 {
 }
 unsafe impl<const MAX_SIZE: usize, T: Default + Copy + Clone + Pod + Zeroable> Pod
+    for Deque<MAX_SIZE, T>
+{
+}
+
+impl<const MAX_SIZE: usize, T: Default + Copy + Clone + Pod + Zeroable> ZeroCopy
     for Deque<MAX_SIZE, T>
 {
 }
@@ -86,7 +90,7 @@ impl<const MAX_SIZE: usize, T: Default + Copy + Clone + Pod + Zeroable> Deque<MA
 
     pub fn pop_front(&mut self) -> Option<&T> {
         if self.head == SENTINEL {
-            return None 
+            return None;
         }
         let head_node = self.get(self.head);
         let new_head = head_node.get_register(NEXT as usize);

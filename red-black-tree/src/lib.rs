@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use node_allocator::{NodeAllocator, SENTINEL};
+use node_allocator::{NodeAllocator, ZeroCopy, SENTINEL};
 use std::ops::{Index, IndexMut};
 
 // Register aliases
@@ -32,6 +32,7 @@ unsafe impl<
     > Pod for RBNode<K, V>
 {
 }
+
 
 impl<
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
@@ -73,6 +74,14 @@ impl<
         const MAX_SIZE: usize,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+    > ZeroCopy for RedBlackTree<MAX_SIZE, K, V>
+{
+}
+
+impl<
+        const MAX_SIZE: usize,
+        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
     > Default for RedBlackTree<MAX_SIZE, K, V>
 {
     fn default() -> Self {
@@ -96,6 +105,12 @@ impl<
 
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn new_from_slice(slice: &mut [u8]) -> &mut Self {
+        let tree = Self::load_mut_bytes(slice).unwrap();
+        tree.allocator.init_default();
+        tree
     }
 
     pub fn get_node(&self, node: u32) -> &RBNode<K, V> {

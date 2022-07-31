@@ -1,5 +1,6 @@
 use bytemuck::Pod;
 use bytemuck::Zeroable;
+use bytemuck::cast_slice_mut;
 use critbit::*;
 use node_allocator::*;
 use rand::rngs::ThreadRng;
@@ -46,13 +47,15 @@ impl Order {
 #[tokio::test(threaded_scheduler)]
 async fn test_simulate() {
     type CritbitTree = Critbit<MAX_SIZE, MAX_LEAVES, Order>;
-    let mut cbt = CritbitTree::new();
+    let mut aligned_buf = vec![0u8; std::mem::size_of::<CritbitTree>()];
+    let bytes: &mut [u8] = cast_slice_mut(aligned_buf.as_mut_slice());
+    let cbt = CritbitTree::new_from_slice(bytes);
     println!("Size: {}", std::mem::size_of::<CritbitTree>());
     let mut rng = thread_rng();
     let mut keys = vec![];
     let mut s = 0;
     let mut map = BTreeMap::new();
-    for _i in 0..(MAX_LEAVES - 1) {
+    for _ in 0..(MAX_LEAVES - 1) {
         let k = rng.gen::<u128>();
         let v = Order::new_random(&mut rng);
         match cbt.insert(k, v) {

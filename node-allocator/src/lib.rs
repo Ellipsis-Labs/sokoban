@@ -1,5 +1,12 @@
 use bytemuck::{Pod, Zeroable};
 
+pub trait ZeroCopy: Pod {
+    fn load_mut_bytes<'a>(data: &'a mut [u8]) -> Option<&'a mut Self> {
+        let size = std::mem::size_of::<Self>();
+        bytemuck::try_from_bytes_mut(&mut data[..size]).ok()
+    }
+}
+
 pub const SENTINEL: u32 = 0;
 
 #[repr(C)]
@@ -96,6 +103,14 @@ impl<
         const MAX_SIZE: usize,
         const NUM_REGISTERS: usize,
         T: Default + Copy + Clone + Pod + Zeroable,
+    > ZeroCopy for NodeAllocator<MAX_SIZE, NUM_REGISTERS, T>
+{
+}
+
+impl<
+        const MAX_SIZE: usize,
+        const NUM_REGISTERS: usize,
+        T: Default + Copy + Clone + Pod + Zeroable,
     > Default for NodeAllocator<MAX_SIZE, NUM_REGISTERS, T>
 {
     fn default() -> Self {
@@ -166,8 +181,14 @@ impl<
 
     #[inline(always)]
     pub fn disconnect(&mut self, i: u32, j: u32, r_i: u32, r_j: u32) {
-        self.clear_register(i, r_i);
-        self.clear_register(j, r_j);
+        if i != SENTINEL {
+            assert!(j == self.get_register(i, r_i));
+            self.clear_register(i, r_i);
+        }
+        if j != SENTINEL {
+            assert!(i == self.get_register(j, r_j));
+            self.clear_register(j, r_j);
+        }
     }
 
     #[inline(always)]
