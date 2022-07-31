@@ -6,7 +6,7 @@ use rand::thread_rng;
 use rand::{self, Rng};
 use std::collections::BTreeMap;
 
-const MAX_SIZE: usize = 100000;
+const MAX_SIZE: usize = 20000;
 const NUM_NODES: usize = 2 * MAX_SIZE;
 
 #[repr(C)]
