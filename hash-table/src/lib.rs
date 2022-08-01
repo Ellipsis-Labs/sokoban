@@ -145,7 +145,6 @@ impl<
             let node = self.get_node(curr_node);
             if node.key == key {
                 self.get_node_mut(curr_node).value = value;
-                println!("Updating value");
                 return Some(curr_node);
             } else {
                 curr_node = self.get_next(curr_node);
@@ -174,7 +173,6 @@ impl<
                 let val = node.value;
                 let prev = self.get_prev(curr_node);
                 let next = self.get_next(curr_node);
-                assert!(prev != next || prev == SENTINEL && next == SENTINEL);
                 self.allocator.clear_register(curr_node, PREV);
                 self.allocator.clear_register(curr_node, NEXT);
                 self.allocator.remove_node(curr_node);
@@ -234,9 +232,11 @@ impl<
             if node.key == *key {
                 let prev = self.get_prev(curr_node);
                 let next = self.get_next(curr_node);
-                self.allocator.clear_register(curr_node, PREV);
-                self.allocator.connect(prev, next, NEXT, PREV);
-                self.allocator.connect(curr_node, head, NEXT, PREV);
+                if curr_node != head {
+                    self.allocator.clear_register(curr_node, PREV);
+                    self.allocator.connect(prev, next, NEXT, PREV);
+                    self.allocator.connect(curr_node, head, NEXT, PREV);
+                }
                 self.buckets[bucket_index] = curr_node;
                 return Some(&mut self.get_node_mut(curr_node).value);
             } else {
@@ -244,6 +244,54 @@ impl<
             }
         }
         None
+    }
+
+    pub fn iter(&self) -> HashTableIterator<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
+        HashTableIterator::<K, V, NUM_BUCKETS, MAX_SIZE> {
+            ht: self,
+            bucket: 0,
+            node: self.buckets[0],
+        }
+    }
+
+}
+
+pub struct HashTableIterator<
+    'a,
+    K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    const NUM_BUCKETS: usize,
+    const MAX_SIZE: usize,
+> {
+    pub ht: &'a HashTable<K, V, NUM_BUCKETS, MAX_SIZE>,
+    pub bucket: usize,
+    pub node: u32,
+}
+
+impl<
+    'a,
+    K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    const NUM_BUCKETS: usize,
+    const MAX_SIZE: usize,
+> Iterator
+    for HashTableIterator<'a, K, V, NUM_BUCKETS, MAX_SIZE>
+{
+    type Item = (&'a K, &'a V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.bucket < NUM_BUCKETS {
+            if self.node == SENTINEL {
+                self.bucket += 1;
+                let head = self.ht.buckets[self.bucket];
+                self.node = head;
+            } 
+            let node = self.ht.get_node(self.node);
+            self.node = self.ht.get_next(self.node);
+            Some((&node.key, &node.value))
+        } else {
+            None
+        }
     }
 }
 

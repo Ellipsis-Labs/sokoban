@@ -106,9 +106,14 @@ async fn test_simulate() {
             let j = rng.gen_range(0, keys.len());
             let key = keys[j];
             assert!(hm.contains(&key));
-            let v = Widget::new_random(&mut rng);
-            assert!(hm.insert(key, v) != None);
-            map.insert(key, v);
+            let sample = rng.gen::<f64>();
+            if sample < 0.5 {
+                let v = Widget::new_random(&mut rng);
+                assert!(hm.insert(key, v) != None);
+                map.insert(key, v);
+            } else {
+                assert!(hm.get_mut(&key) != None);
+            }
         }
     }
     // let nodes = hm.inorder_traversal();
