@@ -2,7 +2,7 @@
 Compact, efficient data structures in contiguous byte arrays.
 
 ## DISCLAIMER
-This is unaudited code, and still very rough around the edges. Proceed with caution before using any of these this data structures in a production system. I highly encourage feedback, suggestions, issues, and PRs :smiley:
+This is unaudited code, and still very rough around the edges. Proceed with caution before using any of these data structures in a production system. I highly encourage feedback, suggestions, issues, and PRs :smiley:
 
 ### Why compact data structures?
 For most applications, there is no reason to look past the Rust standard library for data structures. However, when the application has limited or expensive memory and is bottlenecked by performance, programmers will often need to design custom solutions to address those constraints. These types of constraints come up quite frequently in high frequency trading, embedded systems, and blockchain development.
