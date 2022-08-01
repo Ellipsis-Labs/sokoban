@@ -254,6 +254,14 @@ impl<
         }
     }
 
+    pub fn iter_mut(&mut self) -> HashTableIteratorMut<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
+        let node = self.buckets[0];
+        HashTableIteratorMut::<K, V, NUM_BUCKETS, MAX_SIZE> {
+            ht: self,
+            bucket: 0,
+            node,
+        }
+    }
 }
 
 pub struct HashTableIterator<
@@ -269,13 +277,12 @@ pub struct HashTableIterator<
 }
 
 impl<
-    'a,
-    K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
-    V: Default + Copy + Clone + Pod + Zeroable,
-    const NUM_BUCKETS: usize,
-    const MAX_SIZE: usize,
-> Iterator
-    for HashTableIterator<'a, K, V, NUM_BUCKETS, MAX_SIZE>
+        'a,
+        K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const NUM_BUCKETS: usize,
+        const MAX_SIZE: usize,
+    > Iterator for HashTableIterator<'a, K, V, NUM_BUCKETS, MAX_SIZE>
 {
     type Item = (&'a K, &'a V);
 
@@ -288,10 +295,55 @@ impl<
                 }
                 let head = self.ht.buckets[self.bucket];
                 self.node = head;
-            } 
+            }
             let node = self.ht.get_node(self.node);
             self.node = self.ht.get_next(self.node);
             Some((&node.key, &node.value))
+        } else {
+            None
+        }
+    }
+}
+
+pub struct HashTableIteratorMut<
+    'a,
+    K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    const NUM_BUCKETS: usize,
+    const MAX_SIZE: usize,
+> {
+    pub ht: &'a mut HashTable<K, V, NUM_BUCKETS, MAX_SIZE>,
+    pub bucket: usize,
+    pub node: u32,
+}
+
+impl<
+        'a,
+        K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const NUM_BUCKETS: usize,
+        const MAX_SIZE: usize,
+    > Iterator for HashTableIteratorMut<'a, K, V, NUM_BUCKETS, MAX_SIZE>
+{
+    type Item = (&'a K, &'a mut V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.bucket < NUM_BUCKETS {
+            while self.node == SENTINEL {
+                self.bucket += 1;
+                if self.bucket == NUM_BUCKETS {
+                    return None;
+                }
+                let head = self.ht.buckets[self.bucket];
+                self.node = head;
+            }
+            let ptr = self.node;
+            self.node = self.ht.get_next(self.node);
+            unsafe {
+                let node =
+                    (*self.ht.allocator.nodes.as_mut_ptr().add(ptr as usize)).get_value_mut();
+                Some((&node.key, &mut node.value))
+            }
         } else {
             None
         }

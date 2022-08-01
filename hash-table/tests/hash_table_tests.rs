@@ -53,7 +53,7 @@ async fn test_simulate() {
 
     let k = rng.gen::<u128>();
     let v = Widget::new_random(&mut rng);
-    assert!(hm.insert(k, v)  == None);
+    assert!(hm.insert(k, v) == None);
 
     for k in keys.iter() {
         assert!(hm.remove(k) != None);
@@ -117,8 +117,26 @@ async fn test_simulate() {
         map2.insert(*k, *v);
     }
 
-    println!("{} {}", map.len(), map2.len());
     for ((k1, v1), (k2, v2)) in map.iter().zip(map2.iter()) {
+        println!("{} {}", k1, k2);
+        assert!(*k1 == *k2);
+        assert!(*v1 == *v2);
+    }
+
+    let mut map3 = BTreeMap::new();
+    for (k, v) in hm.iter_mut() {
+        if v.a % 2 == 0 {
+            let new_v = Widget::new_random(&mut rng);
+            *v = new_v;
+            map.insert(*k, new_v);
+        }
+    }
+
+    for (k, v) in hm.iter() {
+        map3.insert(*k, *v);
+    }
+
+    for ((k1, v1), (k2, v2)) in map.iter().zip(map3.iter()) {
         println!("{} {}", k1, k2);
         assert!(*k1 == *k2);
         assert!(*v1 == *v2);

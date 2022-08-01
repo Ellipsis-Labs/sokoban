@@ -107,8 +107,7 @@ async fn test_simulate() {
         }
     }
 
-    let nodes = rbt.inorder_traversal();
-    for ((k1, v1), (k2, v2)) in map.iter().zip(nodes.iter()) {
+    for ((k1, v1), (k2, v2)) in map.iter().zip(rbt.iter()) {
         assert!(*k1 == *k2);
         assert!(*v1 == *v2);
     }

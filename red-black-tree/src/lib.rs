@@ -469,22 +469,97 @@ impl<
         node
     }
 
-    pub fn inorder_traversal(&self) -> Vec<(K, V)> {
-        let mut stack = vec![];
-        let mut curr = self.root;
-        let mut nodes = vec![];
-        while !stack.is_empty() || curr != SENTINEL {
-            if curr != SENTINEL {
-                stack.push(curr);
-                curr = self.get_left(curr);
+    pub fn iter(&self) -> RedBlackTreeIterator<'_, K, V, MAX_SIZE> {
+        RedBlackTreeIterator::<K, V, MAX_SIZE> {
+            tree: self,
+            stack: vec![],
+            node: self.root,
+        }
+    }
+
+    pub fn iter_mut(&mut self) -> RedBlackTreeIteratorMut<'_, K, V, MAX_SIZE> {
+        let node = self.root;
+        RedBlackTreeIteratorMut::<K, V, MAX_SIZE> {
+            tree: self,
+            stack: vec![],
+            node,
+        }
+    }
+}
+
+pub struct RedBlackTreeIterator<
+    'a,
+    K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    const MAX_SIZE: usize,
+> {
+    pub tree: &'a RedBlackTree<K, V, MAX_SIZE>,
+    pub stack: Vec<u32>,
+    pub node: u32,
+}
+
+impl<
+        'a,
+        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_SIZE: usize,
+    > Iterator for RedBlackTreeIterator<'a, K, V, MAX_SIZE>
+{
+    type Item = (&'a K, &'a V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.stack.is_empty() || self.node != SENTINEL {
+            if self.node != SENTINEL {
+                self.stack.push(self.node);
+                self.node = self.tree.get_left(self.node);
             } else {
-                curr = stack.pop().unwrap();
-                let node = self.get_node(curr);
-                nodes.push((node.key, node.value));
-                curr = self.get_right(curr);
+                self.node = self.stack.pop().unwrap();
+                let node = self.tree.get_node(self.node);
+                self.node = self.tree.get_right(self.node);
+                return Some((&node.key, &node.value));
             }
         }
-        nodes
+        return None;
+    }
+}
+
+pub struct RedBlackTreeIteratorMut<
+    'a,
+    K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    const MAX_SIZE: usize,
+> {
+    pub tree: &'a mut RedBlackTree<K, V, MAX_SIZE>,
+    pub stack: Vec<u32>,
+    pub node: u32,
+}
+
+impl<
+        'a,
+        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_SIZE: usize,
+    > Iterator for RedBlackTreeIteratorMut<'a, K, V, MAX_SIZE>
+{
+    type Item = (&'a K, &'a mut V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.stack.is_empty() || self.node != SENTINEL {
+            if self.node != SENTINEL {
+                self.stack.push(self.node);
+                self.node = self.tree.get_left(self.node);
+            } else {
+                self.node = self.stack.pop().unwrap();
+                let ptr = self.node;
+                self.node = self.tree.get_right(ptr);
+                unsafe {
+                    let node =
+                        (*self.tree.allocator.nodes.as_mut_ptr().add(ptr as usize)).get_value_mut();
+                    return Some((&node.key, &mut node.value));
+                }
+            }
+        }
+        return None;
     }
 }
 
