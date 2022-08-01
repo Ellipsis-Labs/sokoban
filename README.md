@@ -10,7 +10,7 @@ For most applications, there is no reason to look past the Rust standard library
 Enter Sokoban: A library of data structures designed to simplify this exact problem.
 
 ### Generic Node Allocator
-Almost all data structures can be represented some sort of connected graph of nodes and edges. The `node-allocator` module implements a raw node allocation data structure for contiguous buffers. Each entry in the buffer is must contain objects of the same underlying type. Each entry will also have a fixed number of *registers* that contain metadata relating to the current node. These registers will usually be interpreted as graph edges.
+Almost all data structures can be represented by some sort of connected graph of nodes and edges. The `node-allocator` module implements a raw node allocation data structure for contiguous buffers. Each entry in the buffer is must contain objects of the same underlying type. Each entry will also have a fixed number of *registers* that contain metadata relating to the current node. These registers will usually be interpreted as graph edges.
 
 ```
 #[repr(C)]
