@@ -6,8 +6,8 @@ use rand::thread_rng;
 use rand::{self, Rng};
 use std::collections::BTreeMap;
 
-const MAX_SIZE: usize = 50000;
-const NUM_BUCKETS: usize = MAX_SIZE / 4;
+const MAX_SIZE: usize = 10001;
+const NUM_BUCKETS: usize = MAX_SIZE >> 2;
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, PartialEq)]
@@ -72,14 +72,12 @@ async fn test_simulate() {
     }
 
     for _ in 0..100000 {
-        println!("{} {}", s, hm.size());
         assert!(s == hm.size());
         let sample = rng.gen::<f64>();
         if sample < 0.33 {
             if hm.size() >= MAX_SIZE - 1 {
                 continue;
             }
-            println!("I");
             let k = rng.gen::<u128>();
             let v = Widget::new_random(&mut rng);
             assert!(hm.insert(k, v) != None);
@@ -90,7 +88,6 @@ async fn test_simulate() {
             if keys.is_empty() {
                 continue;
             }
-            println!("R");
             let j = rng.gen_range(0, keys.len());
             let key = keys[j];
             keys.swap_remove(j);
@@ -102,7 +99,6 @@ async fn test_simulate() {
             if keys.is_empty() {
                 continue;
             }
-            println!("U");
             let j = rng.gen_range(0, keys.len());
             let key = keys[j];
             assert!(hm.contains(&key));
@@ -116,9 +112,15 @@ async fn test_simulate() {
             }
         }
     }
-    // let nodes = hm.inorder_traversal();
-    // for ((k1, v1), (k2, v2)) in map.iter().zip(nodes.iter()) {
-    //     assert!(*k1 == *k2);
-    //     assert!(*v1 == *v2);
-    // }
+    let mut map2 = BTreeMap::new();
+    for (k, v) in hm.iter() {
+        map2.insert(*k, *v);
+    }
+
+    println!("{} {}", map.len(), map2.len());
+    for ((k1, v1), (k2, v2)) in map.iter().zip(map2.iter()) {
+        println!("{} {}", k1, k2);
+        assert!(*k1 == *k2);
+        assert!(*v1 == *v2);
+    }
 }

@@ -281,8 +281,11 @@ impl<
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.bucket < NUM_BUCKETS {
-            if self.node == SENTINEL {
+            while self.node == SENTINEL {
                 self.bucket += 1;
+                if self.bucket == NUM_BUCKETS {
+                    return None;
+                }
                 let head = self.ht.buckets[self.bucket];
                 self.node = head;
             } 
