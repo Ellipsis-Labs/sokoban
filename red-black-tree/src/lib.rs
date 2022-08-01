@@ -552,6 +552,7 @@ impl<
                 self.node = self.stack.pop().unwrap();
                 let ptr = self.node;
                 self.node = self.tree.get_right(ptr);
+                // TODO: How does one remove this unsafe?
                 unsafe {
                     let node =
                         (*self.tree.allocator.nodes.as_mut_ptr().add(ptr as usize)).get_value_mut();

@@ -230,6 +230,7 @@ impl<
         while curr_node != SENTINEL {
             let node = self.get_node(curr_node);
             if node.key == *key {
+                // If get_mut is called, we move the matched node to the front of the queue
                 let prev = self.get_prev(curr_node);
                 let next = self.get_next(curr_node);
                 if curr_node != head {
@@ -339,6 +340,7 @@ impl<
             }
             let ptr = self.node;
             self.node = self.ht.get_next(self.node);
+            // TODO: How does one remove this unsafe?
             unsafe {
                 let node =
                     (*self.ht.allocator.nodes.as_mut_ptr().add(ptr as usize)).get_value_mut();

@@ -104,9 +104,8 @@ async fn test_simulate() {
         }
     }
 
-    let leaves = cbt.inorder_traversal();
-    for ((k1, v1), (k2, v2)) in map.iter().zip(leaves.iter()) {
-        assert!(*k1 == *k2);
+    for ((k1, v1), (k2, v2)) in map.iter().zip(cbt.iter()) {
+        assert!(*k1 == k2);
         assert!(*v1 == *v2);
     }
 }

@@ -335,6 +335,20 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         Some(leaf)
     }
 
+    pub fn iter(&self) -> CritbitIterator<'_, V, NUM_NODES, MAX_SIZE> {
+        CritbitIterator::<V, NUM_NODES, MAX_SIZE> {
+            tree: self,
+            stack: vec![self.root],
+        }
+    }
+
+    pub fn iter_mut(&mut self) -> CritbitIteratorMut<'_, V, NUM_NODES, MAX_SIZE> {
+        let node = self.root;
+        CritbitIteratorMut::<V, NUM_NODES, MAX_SIZE> {
+            tree: self,
+            stack: vec![node],
+        }
+    }
     pub fn inorder_traversal(&self) -> Vec<(u128, V)> {
         let mut stack = vec![self.root];
         let mut leaves = vec![];
@@ -355,6 +369,90 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
             }
         }
         leaves
+    }
+}
+
+pub struct CritbitIterator<
+    'a,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    const MAX_NODES: usize,
+    const MAX_SIZE: usize,
+> {
+    pub tree: &'a Critbit<V, MAX_NODES, MAX_SIZE>,
+    pub stack: Vec<u32>,
+}
+
+impl<
+        'a,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_NODES: usize,
+        const MAX_SIZE: usize,
+    > Iterator for CritbitIterator<'a, V, MAX_NODES, MAX_SIZE>
+{
+    type Item = (u128, &'a V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.stack.is_empty() {
+            let node = self.stack.pop();
+            match node {
+                Some(n) => {
+                    if !self.tree.is_inner_node(n) {
+                        let i = self.tree.get_leaf_index(n);
+                        let v = self.tree.get_leaf(i);
+                        return Some((self.tree.get_node(n).key, v));
+                    } else {
+                        self.stack.push(self.tree.get_right(n));
+                        self.stack.push(self.tree.get_left(n));
+                    }
+                }
+                _ => return None,
+            }
+        }
+        return None;
+    }
+}
+
+pub struct CritbitIteratorMut<
+    'a,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    const MAX_NODES: usize,
+    const MAX_SIZE: usize,
+> {
+    pub tree: &'a mut Critbit<V, MAX_NODES, MAX_SIZE>,
+    pub stack: Vec<u32>,
+}
+
+impl<
+        'a,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_NODES: usize,
+        const MAX_SIZE: usize,
+    > Iterator for CritbitIteratorMut<'a, V, MAX_NODES, MAX_SIZE>
+{
+    type Item = (u128, &'a mut V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.stack.is_empty() {
+            let node = self.stack.pop();
+            match node {
+                Some(n) => {
+                    if !self.tree.is_inner_node(n) {
+                        let i = self.tree.get_leaf_index(n);
+                        unsafe {
+                            let key = self.tree.get_node(n).key;
+                            let leaf = (*self.tree.leaves.nodes.as_mut_ptr().add(i as usize))
+                                .get_value_mut();
+                            return Some((key, leaf));
+                        }
+                    } else {
+                        self.stack.push(self.tree.get_right(n));
+                        self.stack.push(self.tree.get_left(n));
+                    }
+                }
+                _ => return None,
+            }
+        }
+        return None;
     }
 }
 
