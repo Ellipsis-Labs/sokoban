@@ -11,8 +11,8 @@ pub const VALUE: u32 = 3;
 #[repr(C)]
 #[derive(Default, Copy, Clone)]
 pub struct CritbitNode {
-    prefix_len: u64,
-    key: u128,
+    pub prefix_len: u64,
+    pub key: u128,
 }
 
 unsafe impl Zeroable for CritbitNode {}

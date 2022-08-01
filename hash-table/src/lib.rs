@@ -142,9 +142,10 @@ impl<
         let head = self.buckets[bucket_index];
         let mut curr_node = head;
         while curr_node != SENTINEL {
-            let node = self.get_node_mut(curr_node);
+            let node = self.get_node(curr_node);
             if node.key == key {
-                node.value = value;
+                self.get_node_mut(curr_node).value = value;
+                println!("Updating value");
                 return Some(curr_node);
             } else {
                 curr_node = self.get_next(curr_node);
@@ -188,6 +189,22 @@ impl<
             }
         }
         None
+    }
+
+    pub fn contains(&self, key: &K) -> bool {
+        let mut hasher = DefaultHasher::new();
+        key.hash(&mut hasher);
+        let bucket_index = hasher.finish() as usize % NUM_BUCKETS;
+        let mut curr_node = self.buckets[bucket_index];
+        while curr_node != SENTINEL {
+            let node = self.get_node(curr_node);
+            if node.key == *key {
+                return true;
+            } else {
+                curr_node = self.get_next(curr_node);
+            }
+        }
+        false
     }
 
     pub fn get(&self, key: &K) -> Option<&V> {

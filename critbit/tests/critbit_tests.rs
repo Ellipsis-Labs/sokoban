@@ -47,18 +47,14 @@ async fn test_simulate() {
     for _ in 0..(MAX_SIZE - 1) {
         let k = rng.gen::<u128>();
         let v = Widget::new_random(&mut rng);
-        if cbt.insert(k, v) == None {
-            assert!(false)
-        }
+        assert!(cbt.insert(k, v) != None);
         s += 1;
         map.insert(k, v);
         keys.push(k);
     }
 
     for k in keys.iter() {
-        if cbt.remove(*k) == None {
-            assert!(false)
-        }
+        assert!(cbt.remove(*k) != None);
         s -= 1;
         map.remove(k);
     }
@@ -67,9 +63,7 @@ async fn test_simulate() {
     for _i in 0..(MAX_SIZE - 1) {
         let k = rng.gen::<u128>();
         let v = Widget::new_random(&mut rng);
-        if cbt.insert(k, v) == None {
-            assert!(false)
-        }
+        assert!(cbt.insert(k, v) != None);
         s += 1;
         map.insert(k, v);
         keys.push(k);
@@ -84,9 +78,7 @@ async fn test_simulate() {
             }
             let k = rng.gen::<u128>();
             let v = Widget::new_random(&mut rng);
-            if cbt.insert(k, v) == None {
-                assert!(false);
-            }
+            assert!(cbt.insert(k, v) != None);
             s += 1;
             map.insert(k, v);
             keys.push(k);
@@ -97,7 +89,7 @@ async fn test_simulate() {
             let j = rng.gen_range(0, keys.len());
             let key = keys[j];
             keys.swap_remove(j);
-            cbt.remove(key);
+            assert!(cbt.remove(key) != None);
             map.remove(&key);
             s -= 1;
         } else {
@@ -107,7 +99,7 @@ async fn test_simulate() {
             let j = rng.gen_range(0, keys.len());
             let key = keys[j];
             let v = Widget::new_random(&mut rng);
-            cbt.insert(key, v);
+            assert!(cbt.insert(key, v) != None);
             map.insert(key, v);
         }
     }

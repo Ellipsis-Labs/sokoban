@@ -7,4 +7,3 @@ edition = "2021"
 
 [dependencies]
 bytemuck = "1.8.0"
-thiserror = "1.0.30"

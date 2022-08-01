@@ -44,10 +44,7 @@ async fn test_simulate() {
     for _ in 0..(MAX_SIZE - 1) {
         let k = rng.gen::<u128>();
         v = Widget::new_random(&mut rng);
-        match rbt.insert(k, v) {
-            None => assert!(false),
-            _ => {}
-        }
+        assert!(rbt.insert(k, v) != None);
         s += 1;
         assert!(s == rbt.size());
         map.insert(k, v);
@@ -56,22 +53,23 @@ async fn test_simulate() {
 
     let k = rng.gen::<u128>();
     let v = Widget::new_random(&mut rng);
-    match rbt.insert(k, v) {
-        None => println!("Cannot insert when full"),
-        _ => {
-            assert!(false);
-        }
-    }
+    assert!(rbt.insert(k, v) == None);
 
     for k in keys.iter() {
-        match rbt.remove(k) {
-            None => assert!(false),
-            _ => {}
-        }
+        assert!(rbt.remove(k) != None);
         s -= 1;
         map.remove(k);
     }
     keys = vec![];
+
+    for _i in 0..(MAX_SIZE >> 1) {
+        let k = rng.gen::<u128>();
+        let v = Widget::new_random(&mut rng);
+        assert!(rbt.insert(k, v) != None);
+        s += 1;
+        map.insert(k, v);
+        keys.push(k);
+    }
 
     for _ in 0..100000 {
         assert!(s == rbt.size());
@@ -82,12 +80,7 @@ async fn test_simulate() {
             }
             let k = rng.gen::<u128>();
             let v = Widget::new_random(&mut rng);
-            match rbt.insert(k, v) {
-                None => {
-                    assert!(false);
-                }
-                _ => {}
-            }
+            assert!(rbt.insert(k, v) != None);
             s += 1;
             map.insert(k, v);
             keys.push(k);
@@ -99,7 +92,7 @@ async fn test_simulate() {
             let key = keys[j];
             keys.swap_remove(j);
             assert!(rbt[&key] == map[&key]);
-            rbt.remove(&key);
+            assert!(rbt.remove(&key) != None);
             map.remove(&key);
             s -= 1;
         } else {
@@ -109,7 +102,7 @@ async fn test_simulate() {
             let j = rng.gen_range(0, keys.len());
             let key = keys[j];
             let v = Widget::new_random(&mut rng);
-            rbt.insert(key, v);
+            assert!(rbt.insert(key, v) != None);
             map.insert(key, v);
         }
     }
