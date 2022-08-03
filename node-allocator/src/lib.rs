@@ -121,12 +121,15 @@ impl<
     > Default for NodeAllocator<T, MAX_SIZE, NUM_REGISTERS>
 {
     fn default() -> Self {
-        NodeAllocator {
+        assert!(NUM_REGISTERS >= 1);
+        let na = NodeAllocator {
             size: 0,
             bump_index: 1,
             free_list_head: 1,
             nodes: [Node::<T, NUM_REGISTERS>::default(); MAX_SIZE],
-        }
+        };
+        na.assert_proper_alignemnt();
+        na
     }
 }
 
@@ -140,8 +143,24 @@ impl<
         Self::default()
     }
 
+    #[inline(always)]
+    fn assert_proper_alignemnt(&self) {
+        let reg_size = 4 * NUM_REGISTERS;
+        let self_ptr = std::slice::from_ref(self).as_ptr() as usize;
+        let self_align = std::mem::align_of::<Self>();
+        let t_index = self_ptr + 16 + reg_size;
+        let t_align = std::mem::align_of::<T>();
+        let t_size = std::mem::size_of::<T>();
+        assert!(self_ptr % self_align as usize == 0);
+        assert!(t_size % t_align == 0);
+        assert!(t_size == 0 || t_size >= self_align);
+        assert!(t_index % t_align == 0);
+        assert!((t_index + t_size + reg_size) % t_align == 0);
+    }
+
     pub fn init_default(&mut self) {
         assert!(NUM_REGISTERS >= 1);
+        self.assert_proper_alignemnt();
         if self.size == 0 {
             self.bump_index = 1;
             self.free_list_head = 1;

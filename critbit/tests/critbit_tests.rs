@@ -1,24 +1,23 @@
 use bytemuck::Pod;
 use bytemuck::Zeroable;
+use bytemuck::cast_slice_mut;
 use critbit::*;
 use rand::rngs::ThreadRng;
 use rand::thread_rng;
 use rand::{self, Rng};
 use std::collections::BTreeMap;
+use std::mem::{size_of, align_of};
 
 const MAX_SIZE: usize = 20001;
 const NUM_NODES: usize = 2 * MAX_SIZE;
 
 #[repr(C)]
-#[derive(Default, Copy, Clone, PartialEq)]
+#[derive(Default, Copy, Clone, PartialEq, Zeroable, Pod)]
 struct Widget {
     a: u128,
     b: u128,
     size: u64,
 }
-
-unsafe impl Zeroable for Widget {}
-unsafe impl Pod for Widget {}
 
 impl Widget {
     pub fn new_random(r: &mut ThreadRng) -> Self {
@@ -33,6 +32,8 @@ impl Widget {
 #[tokio::test(threaded_scheduler)]
 async fn test_simulate() {
     type CritbitTree = Critbit<Widget, NUM_NODES, MAX_SIZE>;
+
+
     let mut buf = vec![0u8; std::mem::size_of::<CritbitTree>()];
     let cbt = CritbitTree::new_from_slice(buf.as_mut_slice());
     println!(
