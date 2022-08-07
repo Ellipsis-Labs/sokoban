@@ -296,12 +296,12 @@ impl<
 
     fn balance_factor(&self, left: u32, right: u32) -> i32 {
         // safe to convert to i32 since height will be at most log2(capacity)
-        let left_height = if left > SENTINEL {
+        let left_height = if left != SENTINEL {
             self.get_field(left, Field::Height) as i32 + 1
         } else {
             0
         };
-        let right_height = if right > SENTINEL {
+        let right_height = if right != SENTINEL {
             self.get_field(right, Field::Height) as i32 + 1
         } else {
             0
@@ -337,12 +337,12 @@ impl<
         let height = if (left + right) == 0 {
             0
         } else {
-            let left_height = if left > SENTINEL {
+            let left_height = if left != SENTINEL {
                 self.get_field(left, Field::Height)
             } else {
                 0
             };
-            let right_height = if right > SENTINEL {
+            let right_height = if right != SENTINEL {
                 self.get_field(right, Field::Height)
             } else {
                 0
