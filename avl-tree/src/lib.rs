@@ -5,8 +5,8 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-// The number of registers.
-const REGISTERS: usize = 3;
+// The number of registers (the last register is currently not in use).
+const REGISTERS: usize = 4;
 
 // Enum representing the fields of a node:
 // 0 - left pointer
