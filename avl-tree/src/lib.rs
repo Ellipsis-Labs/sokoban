@@ -341,7 +341,7 @@ impl<
         let left = self.get_field(index, Field::Left);
         let right = self.get_field(index, Field::Right);
 
-        let height = if (left + right) == 0 {
+        let height = if left == SENTINEL && right == SENTINEL {
             0
         } else {
             let left_height = if left != SENTINEL {
