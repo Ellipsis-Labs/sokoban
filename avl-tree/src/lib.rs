@@ -272,12 +272,10 @@ impl<
         } else {
             let child = if left == SENTINEL && right == SENTINEL {
                 SENTINEL
+            } else if left != SENTINEL {
+                left
             } else {
-                if left != SENTINEL {
-                    left
-                } else {
-                    right
-                }
+                right
             };
 
             let (parent, branch, _) = path.pop().unwrap();
@@ -582,7 +580,7 @@ impl<
     type Output = V;
 
     fn index(&self, index: &K) -> &Self::Output {
-        &self.get(index).unwrap()
+        self.get(index).unwrap()
     }
 }
 
