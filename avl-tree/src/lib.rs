@@ -12,6 +12,8 @@ const REGISTERS: usize = 4;
 // 0 - left pointer
 // 1 - right pointer
 // 2 - height of the (sub-)tree
+// TODO: add parent reference using the additional register (tree traversal
+// currently does not need this)
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Field {
     Left = 0,
