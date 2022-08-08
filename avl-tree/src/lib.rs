@@ -136,6 +136,10 @@ impl<
     fn set_field(&mut self, node: u32, register: Field, value: u32) {
         if node != SENTINEL {
             self.allocator.set_register(node, value, register as u32);
+
+            if register == Field::Left || register == Field::Right {
+                self.update_height(node);
+            }
         }
     }
 
@@ -233,7 +237,6 @@ impl<
                 leftmost = self.get_field(leftmost, Field::Left);
                 inner_path.push((Some(leftmost_parent), Some(Field::Left), leftmost));
             }
-            
             if leftmost_parent != SENTINEL {
                 self.set_field(
                     leftmost_parent,
@@ -268,7 +271,11 @@ impl<
             let child = if left == SENTINEL && right == SENTINEL {
                 SENTINEL
             } else {
-                if left != SENTINEL { left } else { right }
+                if left != SENTINEL {
+                    left
+                } else {
+                    right
+                }
             };
 
             let (parent, branch, _) = path.pop().unwrap();
