@@ -2,6 +2,8 @@ use bytemuck::{Pod, Zeroable};
 use node_allocator::{NodeAllocator, ZeroCopy, SENTINEL};
 use std::ops::{Index, IndexMut};
 
+pub const ALIGNMENT: u32 = 8;
+
 // Register aliases
 pub const LEFT: u32 = 0;
 pub const RIGHT: u32 = 1;
@@ -56,7 +58,7 @@ pub struct RedBlackTree<
     V: Default + Copy + Clone + Pod + Zeroable,
     const MAX_SIZE: usize,
 > {
-    pub root: u32,
+    pub root: u64,
     allocator: NodeAllocator<RBNode<K, V>, MAX_SIZE, 4>,
 }
 
@@ -90,8 +92,10 @@ impl<
     > Default for RedBlackTree<K, V, MAX_SIZE>
 {
     fn default() -> Self {
+        assert!(std::mem::size_of::<Self>() % ALIGNMENT as usize == 0);
+        assert!(std::mem::size_of::<RBNode<K, V>>() % ALIGNMENT as usize == 0);
         RedBlackTree {
-            root: SENTINEL,
+            root: SENTINEL as u64,
             allocator: NodeAllocator::<RBNode<K, V>, MAX_SIZE, 4>::default(),
         }
     }
@@ -112,8 +116,10 @@ impl<
     }
 
     pub fn new_from_slice(slice: &mut [u8]) -> &mut Self {
+        assert!(std::mem::size_of::<Self>() % ALIGNMENT as usize == 0);
+        assert!(std::mem::size_of::<RBNode<K, V>>() % ALIGNMENT as usize == 0);
         let tree = Self::load_mut_bytes(slice).unwrap();
-        tree.allocator.init_default();
+        tree.allocator.initialize();
         tree
     }
 
@@ -220,7 +226,7 @@ impl<
             }
         } else {
             self.allocator.clear_register(sibling_index, PARENT);
-            self.root = sibling_index;
+            self.root = sibling_index as u64;
         }
         Some(sibling_index)
     }
@@ -230,7 +236,7 @@ impl<
             let mut parent = self.get_parent(node);
             let mut grandparent = self.get_parent(parent);
             if grandparent == SENTINEL {
-                assert!(parent == self.root);
+                assert!(parent == self.root as u32);
                 break;
             }
             let dir = self.child_dir(grandparent, parent);
@@ -252,16 +258,16 @@ impl<
                 self.rotate_dir(grandparent, opposite(dir));
             }
         }
-        self.color_black(self.root);
+        self.color_black(self.root as u32);
         Some(())
     }
 
     pub fn insert(&mut self, key: K, value: V) -> Option<u32> {
-        let mut reference_node = self.root;
+        let mut reference_node = self.root as u32;
         let new_node = RBNode::<K, V>::new(key, value);
         if reference_node == SENTINEL {
             let node_index = self.allocator.add_node(new_node);
-            self.root = node_index;
+            self.root = node_index as u64;
             return Some(node_index);
         }
         loop {
@@ -295,7 +301,7 @@ impl<
         if node_index == SENTINEL {
             return Some(());
         }
-        while node_index != self.root && self.is_black(node_index) {
+        while node_index != self.root as u32 && self.is_black(node_index) {
             let parent = self.get_parent(node_index);
             let dir = self.child_dir(parent, node_index);
             let mut sibling = self.get_child(parent, opposite(dir));
@@ -325,14 +331,14 @@ impl<
                 self.color_black(parent);
                 self.color_black(self.get_right(sibling));
                 self.rotate_dir(parent, dir);
-                node_index = self.root;
+                node_index = self.root as u32;
             }
         }
         Some(())
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        let mut ref_node_index = self.root;
+        let mut ref_node_index = self.root as u32;
         if ref_node_index == SENTINEL {
             return None;
         }
@@ -403,7 +409,7 @@ impl<
     fn transplant(&mut self, target: u32, source: u32) {
         let parent = self.get_parent(target);
         if parent == SENTINEL {
-            self.root = source;
+            self.root = source as u64;
             self.allocator.set_register(source, SENTINEL, PARENT);
             return;
         }
@@ -412,7 +418,7 @@ impl<
     }
 
     pub fn get(&self, key: &K) -> Option<&V> {
-        let mut reference_node = self.root;
+        let mut reference_node = self.root as u32;
         if reference_node == SENTINEL {
             return None;
         }
@@ -433,7 +439,7 @@ impl<
     }
 
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        let mut reference_node = self.root;
+        let mut reference_node = self.root as u32;
         if reference_node == SENTINEL {
             return None;
         }
@@ -473,12 +479,12 @@ impl<
         RedBlackTreeIterator::<K, V, MAX_SIZE> {
             tree: self,
             stack: vec![],
-            node: self.root,
+            node: self.root as u32,
         }
     }
 
     pub fn iter_mut(&mut self) -> RedBlackTreeIteratorMut<'_, K, V, MAX_SIZE> {
-        let node = self.root;
+        let node = self.root as u32;
         RedBlackTreeIteratorMut::<K, V, MAX_SIZE> {
             tree: self,
             stack: vec![],

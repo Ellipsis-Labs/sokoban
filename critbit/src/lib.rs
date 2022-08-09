@@ -76,8 +76,8 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
 
     pub fn new_from_slice(slice: &mut [u8]) -> &mut Self {
         let tree = Self::load_mut_bytes(slice).unwrap();
-        tree.node_allocator.init_default();
-        tree.leaves.init_default();
+        tree.node_allocator.initialize();
+        tree.leaves.initialize();
         tree
     }
 

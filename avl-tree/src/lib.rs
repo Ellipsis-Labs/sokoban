@@ -64,7 +64,7 @@ pub struct AVLTree<
     V: Default + Copy + Clone + Pod + Zeroable,
     const MAX_SIZE: usize,
 > {
-    pub root: u32,
+    pub root: u64,
 
     allocator: NodeAllocator<AVLNode<K, V>, MAX_SIZE, REGISTERS>,
 }
@@ -100,7 +100,7 @@ impl<
 {
     fn default() -> Self {
         AVLTree {
-            root: SENTINEL,
+            root: SENTINEL as u64,
             allocator: NodeAllocator::<AVLNode<K, V>, MAX_SIZE, REGISTERS>::default(),
         }
     }
@@ -122,7 +122,7 @@ impl<
 
     pub fn new_from_slice(slice: &mut [u8]) -> &mut Self {
         let tree = Self::load_mut_bytes(slice).unwrap();
-        tree.allocator.init_default();
+        tree.allocator.initialize();
         tree
     }
 
@@ -151,11 +151,11 @@ impl<
     }
 
     pub fn insert(&mut self, key: K, value: V) -> Option<u32> {
-        let mut reference_node = self.root;
+        let mut reference_node = self.root as u32;
         let new_node = AVLNode::<K, V>::new(key, value);
         if reference_node == SENTINEL {
-            self.root = self.allocator.add_node(new_node);
-            return Some(self.root);
+            self.root = self.allocator.add_node(new_node) as u64;
+            return Some(self.root as u32);
         }
 
         let mut path: Vec<Ancestor> = Vec::with_capacity((self.size() as f64).log2() as usize);
@@ -194,7 +194,7 @@ impl<
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        let mut node_index = self.root;
+        let mut node_index = self.root as u32;
         if node_index == SENTINEL {
             return None;
         }
@@ -291,8 +291,8 @@ impl<
             child
         };
 
-        if node_index == self.root {
-            self.root = replacement;
+        if node_index == self.root as u32 {
+            self.root = replacement as u64;
         }
 
         self.delete(node_index);
@@ -405,7 +405,7 @@ impl<
                 if let Some(parent) = parent {
                     self.set_field(*parent, (*branch).unwrap(), index);
                 } else {
-                    self.root = index;
+                    self.root = index as u64;
                     self.update_height(index);
                 }
             }
@@ -413,7 +413,7 @@ impl<
     }
 
     pub fn get(&self, key: &K) -> Option<&V> {
-        let mut reference_node = self.root;
+        let mut reference_node = self.root as u32;
         if reference_node == SENTINEL {
             return None;
         }
@@ -434,7 +434,7 @@ impl<
     }
 
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        let mut reference_node = self.root;
+        let mut reference_node = self.root as u32;
         if reference_node == SENTINEL {
             return None;
         }
@@ -455,10 +455,10 @@ impl<
     }
 
     pub fn min(&self) -> Option<&V> {
-        if self.root == SENTINEL {
+        if self.root as u32 == SENTINEL {
             return None;
         }
-        let mut node = self.root;
+        let mut node = self.root as u32;
         while self.get_field(node, Field::Left) != SENTINEL {
             node = self.get_field(node, Field::Left);
         }
@@ -466,10 +466,10 @@ impl<
     }
 
     pub fn max(&self) -> Option<&V> {
-        if self.root == SENTINEL {
+        if self.root as u32 == SENTINEL {
             return None;
         }
-        let mut node = self.root;
+        let mut node = self.root as u32;
         while self.get_field(node, Field::Right) != SENTINEL {
             node = self.get_field(node, Field::Right);
         }
@@ -480,12 +480,12 @@ impl<
         AVLTreeIterator::<K, V, MAX_SIZE> {
             tree: self,
             stack: vec![],
-            node: self.root,
+            node: self.root as u32,
         }
     }
 
     pub fn iter_mut(&mut self) -> AVLTreeIteratorMut<'_, K, V, MAX_SIZE> {
-        let node = self.root;
+        let node = self.root as u32;
         AVLTreeIteratorMut::<K, V, MAX_SIZE> {
             tree: self,
             stack: vec![],

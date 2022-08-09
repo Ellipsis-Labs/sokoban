@@ -158,12 +158,14 @@ impl<
         assert!((t_index + t_size + reg_size) % t_align == 0);
     }
 
-    pub fn init_default(&mut self) {
+    pub fn initialize(&mut self) {
         assert!(NUM_REGISTERS >= 1);
         self.assert_proper_alignemnt();
-        if self.size == 0 {
+        if self.size == 0 && self.bump_index == 0 && self.free_list_head == 0 {
             self.bump_index = 1;
             self.free_list_head = 1;
+        } else {
+            panic!("Cannot reinitialize NodeAllocator");
         }
     }
 

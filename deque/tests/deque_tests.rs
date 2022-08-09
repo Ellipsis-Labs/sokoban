@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 
 const MAX_SIZE: usize = 256;
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_initialize() {
     let dll = Deque::<u64, MAX_SIZE>::new();
 
@@ -20,7 +20,7 @@ async fn test_initialize() {
     assert_eq!(dll.tail, SENTINEL, "Init failed to set tail properly");
 }
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_simple() {
     let mut dll = Deque::<u64, MAX_SIZE>::new();
     let mut dll_std = VecDeque::new();

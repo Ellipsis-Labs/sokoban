@@ -1,12 +1,10 @@
 use bytemuck::Pod;
 use bytemuck::Zeroable;
-use bytemuck::cast_slice_mut;
 use critbit::*;
 use rand::rngs::ThreadRng;
 use rand::thread_rng;
 use rand::{self, Rng};
 use std::collections::BTreeMap;
-use std::mem::{size_of, align_of};
 
 const MAX_SIZE: usize = 20001;
 const NUM_NODES: usize = 2 * MAX_SIZE;
@@ -29,7 +27,7 @@ impl Widget {
     }
 }
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_simulate() {
     type CritbitTree = Critbit<Widget, NUM_NODES, MAX_SIZE>;
 

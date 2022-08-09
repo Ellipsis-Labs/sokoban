@@ -29,7 +29,7 @@ impl Widget {
     }
 }
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_simulate() {
     type RBTree = RedBlackTree<u128, Widget, MAX_SIZE>;
     let mut buf = vec![0u8; std::mem::size_of::<RBTree>()];

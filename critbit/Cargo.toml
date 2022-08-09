@@ -13,5 +13,5 @@ node-allocator = { path = "../node-allocator" }
 [dev-dependencies]
 rand_distr = "0.4.3"
 rand = "0.7"
-tokio = { version = "0.2", features = ["macros"] }
+tokio = { version = "1.8.4", features = ["rt-multi-thread", "macros"] }
 env_logger = "*"

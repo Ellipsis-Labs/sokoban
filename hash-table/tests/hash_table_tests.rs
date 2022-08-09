@@ -30,7 +30,7 @@ impl Widget {
     }
 }
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_simulate() {
     type HashMap = HashTable<u128, Widget, NUM_BUCKETS, MAX_SIZE>;
     let mut buf = vec![0u8; std::mem::size_of::<HashMap>()];

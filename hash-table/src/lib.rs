@@ -111,7 +111,7 @@ impl<
 
     pub fn new_from_slice(slice: &mut [u8]) -> &mut Self {
         let tab = Self::load_mut_bytes(slice).unwrap();
-        tab.allocator.init_default();
+        tab.allocator.initialize();
         tab
     }
 
