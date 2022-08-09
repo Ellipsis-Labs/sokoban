@@ -4,5 +4,6 @@ members = [
     "deque",
     "critbit",
     "red-black-tree",
-    "hash-table"
+    "hash-table",
+    "avl-tree"
 ]
