@@ -1,18 +1,15 @@
 use bytemuck::{Pod, Zeroable};
-use node_allocator::{NodeAllocator, ZeroCopy, SENTINEL};
 use std::ops::{Index, IndexMut};
 
-// Register aliases
-pub const LEFT: u32 = 0;
-pub const RIGHT: u32 = 1;
-pub const PARENT: u32 = 2;
-pub const VALUE: u32 = 3;
+use crate::node_allocator::{
+    FromSlice, NodeAllocator, NodeAllocatorMap, TreeField as Field, ZeroCopy, SENTINEL,
+};
 
 #[repr(C)]
 #[derive(Default, Copy, Clone)]
 pub struct CritbitNode {
-    pub prefix_len: u64,
     pub key: u128,
+    pub prefix_len: u64,
 }
 
 unsafe impl Zeroable for CritbitNode {}
@@ -68,21 +65,54 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
 }
 
 impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
-    Critbit<V, NUM_NODES, MAX_SIZE>
+    FromSlice for Critbit<V, NUM_NODES, MAX_SIZE>
 {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn new_from_slice(slice: &mut [u8]) -> &mut Self {
+    fn new_from_slice(slice: &mut [u8]) -> &mut Self {
+        assert!(NUM_NODES >= 2 * MAX_SIZE);
+        Self::assert_proper_alignment();
         let tree = Self::load_mut_bytes(slice).unwrap();
         tree.node_allocator.initialize();
         tree.leaves.initialize();
         tree
     }
+}
 
-    pub fn size(&self) -> usize {
+impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
+    NodeAllocatorMap<u128, V> for Critbit<V, NUM_NODES, MAX_SIZE>
+{
+    fn insert(&mut self, key: u128, value: V) -> Option<u32> {
+        self._insert(key, value)
+    }
+
+    fn remove(&mut self, key: &u128) -> Option<V> {
+        self._remove(key)
+    }
+
+    fn size(&self) -> usize {
         self.leaves.size as usize
+    }
+
+    fn iter(&self) -> Box<dyn Iterator<Item = (&u128, &V)> + '_> {
+        Box::new(self._iter())
+    }
+
+    fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (&u128, &mut V)> + '_> {
+        Box::new(self._iter_mut())
+    }
+}
+
+impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
+    Critbit<V, NUM_NODES, MAX_SIZE>
+{
+    fn assert_proper_alignment() {
+        #[cfg(target_arch = "aarch64")]
+        panic!("Byte alignment for Critbit is invalid for aarch64");
+        assert!(std::mem::align_of::<V>() == 8);
+    }
+
+    pub fn new() -> Self {
+        Self::assert_proper_alignment();
+        Self::default()
     }
 
     pub fn get_leaf(&self, leaf_index: u32) -> &V {
@@ -94,30 +124,34 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     }
 
     fn get_leaf_index(&self, node: u32) -> u32 {
-        self.node_allocator.get_register(node, VALUE)
+        self.node_allocator.get_register(node, Field::Value as u32)
     }
 
     pub fn is_inner_node(&self, node: u32) -> bool {
-        self.node_allocator.get_register(node, VALUE) == SENTINEL
+        self.node_allocator.get_register(node, Field::Value as u32) == SENTINEL
     }
 
     pub fn get_node(&self, node: u32) -> CritbitNode {
         *self.node_allocator.get(node).get_value()
     }
 
+    pub fn get_key(&self, node: u32) -> &u128 {
+        &self.node_allocator.get(node).get_value().key
+    }
+
     #[inline(always)]
     pub fn get_left(&self, node: u32) -> u32 {
-        self.node_allocator.get_register(node, LEFT)
+        self.node_allocator.get_register(node, Field::Left as u32)
     }
 
     #[inline(always)]
     pub fn get_right(&self, node: u32) -> u32 {
-        self.node_allocator.get_register(node, RIGHT)
+        self.node_allocator.get_register(node, Field::Right as u32)
     }
 
     #[inline(always)]
     pub fn get_parent(&self, node: u32) -> u32 {
-        self.node_allocator.get_register(node, PARENT)
+        self.node_allocator.get_register(node, Field::Parent as u32)
     }
 
     pub fn get_node_mut(&mut self, node: u32) -> &mut CritbitNode {
@@ -134,7 +168,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         let node_index = self.node_allocator.add_node(CritbitNode::new(128, key));
         let leaf_index = self.leaves.add_node(value);
         self.node_allocator
-            .set_register(node_index, leaf_index, VALUE);
+            .set_register(node_index, leaf_index, Field::Value as u32);
         self.leaves.get_mut(leaf_index).set_value(value);
         (node_index, leaf_index)
     }
@@ -143,9 +177,9 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     fn get_child(&self, prefix_len: u64, node_index: u32, search_key: u128) -> (u32, bool) {
         let crit_bit_mask = (1u128 << 127) >> prefix_len;
         if (search_key & crit_bit_mask) != 0 {
-            (self.node_allocator.get_register(node_index, RIGHT), true)
+            (self.get_right(node_index), true)
         } else {
-            (self.node_allocator.get_register(node_index, LEFT), false)
+            (self.get_left(node_index), false)
         }
     }
 
@@ -154,10 +188,15 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         let index = self.node_allocator.add_node(self.get_node(node_index));
         let left = self.get_left(node_index);
         let right = self.get_right(node_index);
-        let value = self.node_allocator.get_register(node_index, VALUE);
-        self.node_allocator.set_register(index, value, VALUE);
-        self.node_allocator.connect(index, left, LEFT, PARENT);
-        self.node_allocator.connect(index, right, RIGHT, PARENT);
+        let value = self
+            .node_allocator
+            .get_register(node_index, Field::Value as u32);
+        self.node_allocator
+            .set_register(index, value, Field::Value as u32);
+        self.node_allocator
+            .connect(index, left, Field::Left as u32, Field::Parent as u32);
+        self.node_allocator
+            .connect(index, right, Field::Right as u32, Field::Parent as u32);
         index
     }
 
@@ -170,10 +209,12 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         right: u32,
     ) {
         *self.get_node_mut(node_index) = *node_contents;
-        self.node_allocator.clear_register(node_index, VALUE);
-        self.node_allocator.connect(node_index, left, LEFT, PARENT);
         self.node_allocator
-            .connect(node_index, right, RIGHT, PARENT);
+            .clear_register(node_index, Field::Value as u32);
+        self.node_allocator
+            .connect(node_index, left, Field::Left as u32, Field::Parent as u32);
+        self.node_allocator
+            .connect(node_index, right, Field::Right as u32, Field::Parent as u32);
     }
 
     #[inline(always)]
@@ -184,16 +225,28 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
             assert!(self.get_left(source) == SENTINEL);
             assert!(self.get_right(source) == SENTINEL);
             let leaf_index = self.get_leaf_index(source);
-            self.node_allocator.clear_register(source, VALUE);
-            self.node_allocator.set_register(target, leaf_index, VALUE);
+            self.node_allocator
+                .clear_register(source, Field::Value as u32);
+            self.node_allocator
+                .set_register(target, leaf_index, Field::Value as u32);
         }
         assert!(self.get_leaf_index(source) == SENTINEL);
+        self.node_allocator.connect(
+            target,
+            self.get_left(source),
+            Field::Left as u32,
+            Field::Parent as u32,
+        );
+        self.node_allocator.connect(
+            target,
+            self.get_right(source),
+            Field::Right as u32,
+            Field::Parent as u32,
+        );
         self.node_allocator
-            .connect(target, self.get_left(source), LEFT, PARENT);
+            .clear_register(source, Field::Left as u32);
         self.node_allocator
-            .connect(target, self.get_right(source), RIGHT, PARENT);
-        self.node_allocator.clear_register(source, LEFT);
-        self.node_allocator.clear_register(source, RIGHT);
+            .clear_register(source, Field::Right as u32);
         self.node_allocator.remove_node(source);
     }
 
@@ -201,15 +254,24 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     fn remove_leaf(&mut self, node_index: u32) -> V {
         let leaf_index = self.get_leaf_index(node_index);
         let value = *self.get_leaf(leaf_index);
-        self.node_allocator.clear_register(node_index, VALUE);
+        self.node_allocator
+            .clear_register(node_index, Field::Value as u32);
         assert!(self.get_leaf_index(node_index) == SENTINEL);
         let parent = self.get_parent(node_index);
         if node_index == self.get_left(parent) {
-            self.node_allocator
-                .disconnect(node_index, parent, PARENT, LEFT);
+            self.node_allocator.disconnect(
+                node_index,
+                parent,
+                Field::Parent as u32,
+                Field::Left as u32,
+            );
         } else if node_index == self.get_right(parent) {
-            self.node_allocator
-                .disconnect(node_index, parent, PARENT, RIGHT);
+            self.node_allocator.disconnect(
+                node_index,
+                parent,
+                Field::Parent as u32,
+                Field::Right as u32,
+            );
         } else if parent != SENTINEL {
             panic!("Parent is not connected to child");
         }
@@ -258,11 +320,15 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         }
     }
 
-    pub fn insert(&mut self, key: u128, value: V) -> Option<(u32, u32)> {
+    pub fn _insert(&mut self, key: u128, value: V) -> Option<u32> {
         if self.root as u32 == SENTINEL {
-            let (node_index, leaf_index) = self.add_leaf(key, value);
+            let (node_index, _leaf_index) = self.add_leaf(key, value);
             self.root = node_index as u64;
-            return Some((self.root as u32, leaf_index));
+            return Some(self.root as u32);
+        }
+        // Return None if the tree is filled up
+        if self.size() >= MAX_SIZE - 1 {
+            return None;
         }
         let mut node_index = self.root as u32;
         loop {
@@ -271,7 +337,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
                 // Replace the node with the new value
                 let leaf_index = self.get_leaf_index(node_index);
                 self.replace_leaf(leaf_index, value);
-                return Some((node_index, leaf_index));
+                return Some(node_index);
             }
             let shared_prefix_len = (node.key ^ key).leading_zeros() as u64;
             if shared_prefix_len >= node.prefix_len {
@@ -280,7 +346,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
             }
             let crit_bit_mask: u128 = (1u128 << 127) >> shared_prefix_len;
             let is_right = (crit_bit_mask & key) != 0;
-            let (node_leaf_index, leaf_index) = self.add_leaf(key, value);
+            let (node_leaf_index, _leaf_index) = self.add_leaf(key, value);
             let moved_node_index = self.duplicate(node_index);
             let new_node = CritbitNode::new(shared_prefix_len, key);
             if is_right {
@@ -288,11 +354,11 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
             } else {
                 self.replace_node(node_index, &new_node, node_leaf_index, moved_node_index);
             }
-            return Some((node_leaf_index, leaf_index));
+            return Some(node_leaf_index);
         }
     }
 
-    pub fn remove(&mut self, key: u128) -> Option<V> {
+    pub fn _remove(&mut self, key: &u128) -> Option<V> {
         let nsize = self.node_allocator.size;
         let lsize = self.leaves.size;
         let mut parent = self.root as u32;
@@ -300,12 +366,12 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         let mut is_right: bool;
         if self.is_inner_node(parent) {
             let node = self.get_node(parent);
-            let (c, ir) = self.get_child(node.prefix_len, parent, key);
+            let (c, ir) = self.get_child(node.prefix_len, parent, *key);
             child = c;
             is_right = ir;
         } else {
             let leaf = self.get_node(parent);
-            if leaf.key == key {
+            if leaf.key == *key {
                 self.root = SENTINEL as u64;
                 assert!(self.size() == 1);
                 return Some(self.remove_leaf(parent));
@@ -316,12 +382,13 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         loop {
             let node = self.get_node(child);
             if self.is_inner_node(child) {
-                let (grandchild, grandchild_crit_bit) = self.get_child(node.prefix_len, child, key);
+                let (grandchild, grandchild_crit_bit) =
+                    self.get_child(node.prefix_len, child, *key);
                 parent = child;
                 child = grandchild;
                 is_right = grandchild_crit_bit;
             } else {
-                if node.key != key {
+                if node.key != *key {
                     return None;
                 }
                 break;
@@ -339,14 +406,14 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         Some(leaf)
     }
 
-    pub fn iter(&self) -> CritbitIterator<'_, V, NUM_NODES, MAX_SIZE> {
+    pub fn _iter(&self) -> CritbitIterator<'_, V, NUM_NODES, MAX_SIZE> {
         CritbitIterator::<V, NUM_NODES, MAX_SIZE> {
             tree: self,
             stack: vec![self.root as u32],
         }
     }
 
-    pub fn iter_mut(&mut self) -> CritbitIteratorMut<'_, V, NUM_NODES, MAX_SIZE> {
+    pub fn _iter_mut(&mut self) -> CritbitIteratorMut<'_, V, NUM_NODES, MAX_SIZE> {
         let node = self.root as u32;
         CritbitIteratorMut::<V, NUM_NODES, MAX_SIZE> {
             tree: self,
@@ -393,7 +460,7 @@ impl<
         const MAX_SIZE: usize,
     > Iterator for CritbitIterator<'a, V, MAX_NODES, MAX_SIZE>
 {
-    type Item = (u128, &'a V);
+    type Item = (&'a u128, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
         while !self.stack.is_empty() {
@@ -403,7 +470,8 @@ impl<
                     if !self.tree.is_inner_node(n) {
                         let i = self.tree.get_leaf_index(n);
                         let v = self.tree.get_leaf(i);
-                        return Some((self.tree.get_node(n).key, v));
+                        let k = self.tree.get_key(n);
+                        return Some((k, v));
                     } else {
                         self.stack.push(self.tree.get_right(n));
                         self.stack.push(self.tree.get_left(n));
@@ -433,7 +501,7 @@ impl<
         const MAX_SIZE: usize,
     > Iterator for CritbitIteratorMut<'a, V, MAX_NODES, MAX_SIZE>
 {
-    type Item = (u128, &'a mut V);
+    type Item = (&'a u128, &'a mut V);
 
     fn next(&mut self) -> Option<Self::Item> {
         while !self.stack.is_empty() {
@@ -443,7 +511,9 @@ impl<
                     if !self.tree.is_inner_node(n) {
                         let i = self.tree.get_leaf_index(n);
                         unsafe {
-                            let key = self.tree.get_node(n).key;
+                            let key = &(*self.tree.node_allocator.nodes.as_ptr().add(n as usize))
+                                .get_value()
+                                .key;
                             let leaf = (*self.tree.leaves.nodes.as_mut_ptr().add(i as usize))
                                 .get_value_mut();
                             return Some((key, leaf));

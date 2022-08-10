@@ -1,9 +1,18 @@
-[workspace]
-members = [
-    "node-allocator",
-    "deque",
-    "critbit",
-    "red-black-tree",
-    "hash-table",
-    "avl-tree"
-]
+[package]
+name = "sokoban"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bytemuck = "1.11.0"
+thiserror = "1.0.30"
+num-derive = "0.3.3"
+num-traits = "0.2.15"
+
+[dev-dependencies]
+rand_distr = "0.4.3"
+itertools = "0.10.3"
+rand = "0.7"
+tokio = { version = "1.8.4", features = ["rt-multi-thread", "macros"] }

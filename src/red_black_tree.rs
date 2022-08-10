@@ -1,17 +1,22 @@
 use bytemuck::{Pod, Zeroable};
-use node_allocator::{NodeAllocator, ZeroCopy, SENTINEL};
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 use std::ops::{Index, IndexMut};
+
+use crate::node_allocator::{
+    FromSlice, NodeAllocator, NodeAllocatorMap, TreeField as Field, ZeroCopy, SENTINEL,
+};
 
 pub const ALIGNMENT: u32 = 8;
 
 // Register aliases
-pub const LEFT: u32 = 0;
-pub const RIGHT: u32 = 1;
-pub const PARENT: u32 = 2;
-pub const COLOR: u32 = 3;
-// Default nodes are conveniently colored black
-pub const BLACK: u32 = 0;
-pub const RED: u32 = 1;
+pub const COLOR: u32 = Field::Value as u32;
+
+#[derive(Debug, Copy, Clone, PartialEq, FromPrimitive)]
+pub enum Color {
+    Black = 0,
+    Red = 1,
+}
 
 /// Exploits the fact that LEFT and RIGHT are set to 0 and 1 respectively
 #[inline(always)]
@@ -92,8 +97,7 @@ impl<
     > Default for RedBlackTree<K, V, MAX_SIZE>
 {
     fn default() -> Self {
-        assert!(std::mem::size_of::<Self>() % ALIGNMENT as usize == 0);
-        assert!(std::mem::size_of::<RBNode<K, V>>() % ALIGNMENT as usize == 0);
+        Self::assert_proper_alignment();
         RedBlackTree {
             root: SENTINEL as u64,
             allocator: NodeAllocator::<RBNode<K, V>, MAX_SIZE, 4>::default(),
@@ -105,22 +109,62 @@ impl<
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
+    > FromSlice for RedBlackTree<K, V, MAX_SIZE>
+{
+    fn new_from_slice(slice: &mut [u8]) -> &mut Self {
+        Self::assert_proper_alignment();
+        let tree = Self::load_mut_bytes(slice).unwrap();
+        tree.allocator.initialize();
+        tree
+    }
+}
+
+impl<
+        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_SIZE: usize,
+    > NodeAllocatorMap<K, V> for RedBlackTree<K, V, MAX_SIZE>
+{
+    fn insert(&mut self, key: K, value: V) -> Option<u32> {
+        self._insert(key, value)
+    }
+
+    fn remove(&mut self, key: &K) -> Option<V> {
+        self._remove(key)
+    }
+
+    fn size(&self) -> usize {
+        self.allocator.size as usize
+    }
+
+    fn iter(&self) -> Box<dyn Iterator<Item = (&K, &V)> + '_> {
+        Box::new(self._iter())
+    }
+
+    fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (&K, &mut V)> + '_> {
+        Box::new(self._iter_mut())
+    }
+}
+
+impl<
+        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_SIZE: usize,
     > RedBlackTree<K, V, MAX_SIZE>
 {
-    pub fn size(&self) -> usize {
-        self.allocator.size as usize
+    fn assert_proper_alignment() {
+        #[cfg(any(target_arch = "x86", target_arch = "wasm32"))]
+        assert!(std::mem::size_of::<Self>() % 4 as usize == 0);
+        #[cfg(any(target_arch = "x86", target_arch = "wasm32"))]
+        assert!(std::mem::size_of::<RBNode<K, V>>() % 4 as usize == 0);
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        assert!(std::mem::size_of::<Self>() % 8 as usize == 0);
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        assert!(std::mem::size_of::<RBNode<K, V>>() % 8 as usize == 0);
     }
 
     pub fn new() -> Self {
         Self::default()
-    }
-
-    pub fn new_from_slice(slice: &mut [u8]) -> &mut Self {
-        assert!(std::mem::size_of::<Self>() % ALIGNMENT as usize == 0);
-        assert!(std::mem::size_of::<RBNode<K, V>>() % ALIGNMENT as usize == 0);
-        let tree = Self::load_mut_bytes(slice).unwrap();
-        tree.allocator.initialize();
-        tree
     }
 
     pub fn get_node(&self, node: u32) -> &RBNode<K, V> {
@@ -134,23 +178,24 @@ impl<
     #[inline(always)]
     fn color_red(&mut self, node: u32) {
         if node != SENTINEL {
-            self.allocator.set_register(node, RED, COLOR);
+            self.allocator.set_register(node, Color::Red as u32, COLOR);
         }
     }
 
     #[inline(always)]
     fn color_black(&mut self, node: u32) {
-        self.allocator.set_register(node, BLACK, COLOR);
+        self.allocator
+            .set_register(node, Color::Black as u32, COLOR);
     }
 
     #[inline(always)]
     fn is_red(&self, node: u32) -> bool {
-        self.allocator.get_register(node, COLOR) == RED
+        self.allocator.get_register(node, COLOR) == Color::Red as u32
     }
 
     #[inline(always)]
     fn is_black(&self, node: u32) -> bool {
-        self.allocator.get_register(node, COLOR) == BLACK
+        self.allocator.get_register(node, COLOR) == Color::Black as u32
     }
 
     #[inline(always)]
@@ -165,12 +210,12 @@ impl<
 
     #[inline(always)]
     pub fn get_left(&self, node: u32) -> u32 {
-        self.allocator.get_register(node, LEFT)
+        self.allocator.get_register(node, Field::Left as u32)
     }
 
     #[inline(always)]
     pub fn get_right(&self, node: u32) -> u32 {
-        self.allocator.get_register(node, RIGHT)
+        self.allocator.get_register(node, Field::Right as u32)
     }
 
     #[inline(always)]
@@ -180,12 +225,13 @@ impl<
 
     #[inline(always)]
     pub fn get_parent(&self, node: u32) -> u32 {
-        self.allocator.get_register(node, PARENT)
+        self.allocator.get_register(node, Field::Parent as u32)
     }
 
     #[inline(always)]
     pub fn connect(&mut self, parent: u32, child: u32, dir: u32) {
-        self.allocator.connect(parent, child, dir, PARENT);
+        self.allocator
+            .connect(parent, child, dir, Field::Parent as u32);
     }
 
     #[inline(always)]
@@ -194,10 +240,10 @@ impl<
         let right = self.get_right(parent);
         if child == left {
             assert!(self.get_parent(child) == parent);
-            LEFT
+            Field::Left as u32
         } else if child == right {
             assert!(self.get_parent(child) == parent);
-            RIGHT
+            Field::Right as u32
         } else {
             panic!("Nodes are not connected");
         }
@@ -205,8 +251,8 @@ impl<
 
     fn rotate_dir(&mut self, parent_index: u32, dir: u32) -> Option<u32> {
         let grandparent_index = self.get_parent(parent_index);
-        match dir {
-            LEFT | RIGHT => {}
+        match FromPrimitive::from_u32(dir) {
+            Some(Field::Left) | Some(Field::Right) => {}
             _ => return None,
         }
         let sibling_index = self.get_child(parent_index, opposite(dir));
@@ -218,14 +264,15 @@ impl<
         self.connect(parent_index, child_index, opposite(dir));
         if grandparent_index != SENTINEL {
             if self.get_left(grandparent_index) == parent_index {
-                self.connect(grandparent_index, sibling_index, LEFT);
+                self.connect(grandparent_index, sibling_index, Field::Left as u32);
             } else if self.get_right(grandparent_index) == parent_index {
-                self.connect(grandparent_index, sibling_index, RIGHT);
+                self.connect(grandparent_index, sibling_index, Field::Right as u32);
             } else {
                 return None;
             }
         } else {
-            self.allocator.clear_register(sibling_index, PARENT);
+            self.allocator
+                .clear_register(sibling_index, Field::Parent as u32);
             self.root = sibling_index as u64;
         }
         Some(sibling_index)
@@ -262,7 +309,7 @@ impl<
         Some(())
     }
 
-    pub fn insert(&mut self, key: K, value: V) -> Option<u32> {
+    pub fn _insert(&mut self, key: K, value: V) -> Option<u32> {
         let mut reference_node = self.root as u32;
         let new_node = RBNode::<K, V>::new(key, value);
         if reference_node == SENTINEL {
@@ -273,9 +320,9 @@ impl<
         loop {
             let ref_value = self.get_node(reference_node).key;
             let (target, dir) = if key < ref_value {
-                (self.get_left(reference_node), LEFT)
+                (self.get_left(reference_node), Field::Left as u32)
             } else if key > ref_value {
-                (self.get_right(reference_node), RIGHT)
+                (self.get_right(reference_node), Field::Right as u32)
             } else {
                 self.get_node_mut(reference_node).value = value;
                 return Some(reference_node);
@@ -337,7 +384,7 @@ impl<
         Some(())
     }
 
-    pub fn remove(&mut self, key: &K) -> Option<V> {
+    pub fn _remove(&mut self, key: &K) -> Option<V> {
         let mut ref_node_index = self.root as u32;
         if ref_node_index == SENTINEL {
             return None;
@@ -355,11 +402,13 @@ impl<
                 let mut is_black = self.is_black(ref_node_index);
                 let (pivot_node_index, delete_node_index) = if left == SENTINEL {
                     self.transplant(ref_node_index, right);
-                    self.allocator.clear_register(ref_node_index, RIGHT);
+                    self.allocator
+                        .clear_register(ref_node_index, Field::Right as u32);
                     (right, ref_node_index)
                 } else if right == SENTINEL {
                     self.transplant(ref_node_index, left);
-                    self.allocator.clear_register(ref_node_index, LEFT);
+                    self.allocator
+                        .clear_register(ref_node_index, Field::Left as u32);
                     (left, ref_node_index)
                 } else {
                     assert!(self.get_parent(self.get_left(ref_node_index)) == ref_node_index);
@@ -374,20 +423,23 @@ impl<
                         );
                     } else {
                         self.transplant(min_right, min_right_child);
-                        self.connect(min_right, right, RIGHT);
+                        self.connect(min_right, right, Field::Right as u32);
                     }
                     self.transplant(ref_node_index, min_right);
-                    self.connect(min_right, left, LEFT);
+                    self.connect(min_right, left, Field::Left as u32);
                     if self.is_red(ref_node_index) {
                         self.color_red(min_right)
                     } else {
                         self.color_black(min_right)
                     }
-                    self.allocator.clear_register(ref_node_index, LEFT);
-                    self.allocator.clear_register(ref_node_index, RIGHT);
+                    self.allocator
+                        .clear_register(ref_node_index, Field::Left as u32);
+                    self.allocator
+                        .clear_register(ref_node_index, Field::Right as u32);
                     (min_right_child, ref_node_index)
                 };
-                self.allocator.clear_register(ref_node_index, PARENT);
+                self.allocator
+                    .clear_register(ref_node_index, Field::Parent as u32);
                 assert!(self.is_leaf(delete_node_index));
                 self.allocator.clear_register(delete_node_index, COLOR);
                 self.allocator.remove_node(delete_node_index);
@@ -410,7 +462,8 @@ impl<
         let parent = self.get_parent(target);
         if parent == SENTINEL {
             self.root = source as u64;
-            self.allocator.set_register(source, SENTINEL, PARENT);
+            self.allocator
+                .set_register(source, SENTINEL, Field::Parent as u32);
             return;
         }
         let dir = self.child_dir(parent, target);
@@ -475,7 +528,7 @@ impl<
         node
     }
 
-    pub fn iter(&self) -> RedBlackTreeIterator<'_, K, V, MAX_SIZE> {
+    pub fn _iter(&self) -> RedBlackTreeIterator<'_, K, V, MAX_SIZE> {
         RedBlackTreeIterator::<K, V, MAX_SIZE> {
             tree: self,
             stack: vec![],
@@ -483,7 +536,7 @@ impl<
         }
     }
 
-    pub fn iter_mut(&mut self) -> RedBlackTreeIteratorMut<'_, K, V, MAX_SIZE> {
+    pub fn _iter_mut(&mut self) -> RedBlackTreeIteratorMut<'_, K, V, MAX_SIZE> {
         let node = self.root as u32;
         RedBlackTreeIteratorMut::<K, V, MAX_SIZE> {
             tree: self,

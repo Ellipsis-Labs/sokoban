@@ -1,5 +1,5 @@
+use crate::node_allocator::{NodeAllocator, ZeroCopy, SENTINEL};
 use bytemuck::{Pod, Zeroable};
-use node_allocator::{NodeAllocator, ZeroCopy, SENTINEL};
 
 // Register aliases
 pub const PREV: u32 = 0;

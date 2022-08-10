@@ -1,15 +1,13 @@
+use crate::node_allocator::{
+    FromSlice, NodeAllocator, NodeAllocatorMap, NodeField, ZeroCopy, SENTINEL,
+};
 use bytemuck::{Pod, Zeroable};
-use node_allocator::{NodeAllocator, ZeroCopy, SENTINEL};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use std::{
     hash::Hash,
     ops::{Index, IndexMut},
 };
-
-// Register aliases
-pub const PREV: u32 = 0;
-pub const NEXT: u32 = 1;
 
 #[repr(C)]
 #[derive(Default, Copy, Clone)]
@@ -90,6 +88,7 @@ impl<
     > Default for HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
 {
     fn default() -> Self {
+        Self::assert_proper_alignment();
         HashTable {
             sequence_number: 0,
             buckets: [SENTINEL; NUM_BUCKETS],
@@ -103,28 +102,74 @@ impl<
         V: Default + Copy + Clone + Pod + Zeroable,
         const NUM_BUCKETS: usize,
         const MAX_SIZE: usize,
-    > HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
+    > NodeAllocatorMap<K, V> for HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
 {
-    pub fn new() -> Self {
-        Self::default()
+    fn insert(&mut self, key: K, value: V) -> Option<u32> {
+        self._insert(key, value)
     }
 
-    pub fn new_from_slice(slice: &mut [u8]) -> &mut Self {
+    fn remove(&mut self, key: &K) -> Option<V> {
+        self._remove(key)
+    }
+
+    fn size(&self) -> usize {
+        self.allocator.size as usize
+    }
+
+    fn iter(&self) -> Box<dyn Iterator<Item = (&K, &V)> + '_> {
+        Box::new(self._iter())
+    }
+
+    fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (&K, &mut V)> + '_> {
+        Box::new(self._iter_mut())
+    }
+}
+
+impl<
+        K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const NUM_BUCKETS: usize,
+        const MAX_SIZE: usize,
+    > FromSlice for HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
+{
+    fn new_from_slice(slice: &mut [u8]) -> &mut Self {
+        Self::assert_proper_alignment();
         let tab = Self::load_mut_bytes(slice).unwrap();
         tab.allocator.initialize();
         tab
     }
+}
 
-    pub fn size(&self) -> usize {
-        self.allocator.size as usize
+impl<
+        K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const NUM_BUCKETS: usize,
+        const MAX_SIZE: usize,
+    > HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
+{
+    fn assert_proper_alignment() {
+        #[cfg(any(target_arch = "x86", target_arch = "wasm32"))]
+        assert!(std::mem::size_of::<Self>() % 4 as usize == 0);
+        #[cfg(any(target_arch = "x86", target_arch = "wasm32"))]
+        assert!(std::mem::size_of::<HashNode<K, V>>() % 4 as usize == 0);
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        assert!(std::mem::size_of::<Self>() % 8 as usize == 0);
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        assert!(std::mem::size_of::<HashNode<K, V>>() % 8 as usize == 0);
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        assert!(NUM_BUCKETS % 2 == 0);
+    }
+
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn get_next(&self, index: u32) -> u32 {
-        self.allocator.get_register(index, NEXT)
+        self.allocator.get_register(index, NodeField::Right as u32)
     }
 
     pub fn get_prev(&self, index: u32) -> u32 {
-        self.allocator.get_register(index, PREV)
+        self.allocator.get_register(index, NodeField::Left as u32)
     }
 
     pub fn get_node(&self, index: u32) -> &HashNode<K, V> {
@@ -135,7 +180,7 @@ impl<
         self.allocator.get_mut(index).get_value_mut()
     }
 
-    pub fn insert(&mut self, key: K, value: V) -> Option<u32> {
+    pub fn _insert(&mut self, key: K, value: V) -> Option<u32> {
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
         let bucket_index = hasher.finish() as usize % NUM_BUCKETS;
@@ -156,12 +201,17 @@ impl<
         let node_index = self.allocator.add_node(HashNode::new(key, value));
         self.buckets[bucket_index] = node_index;
         if head != SENTINEL {
-            self.allocator.connect(node_index, head, NEXT, PREV);
+            self.allocator.connect(
+                node_index,
+                head,
+                NodeField::Right as u32,
+                NodeField::Left as u32,
+            );
         }
         Some(node_index)
     }
 
-    pub fn remove(&mut self, key: &K) -> Option<V> {
+    pub fn _remove(&mut self, key: &K) -> Option<V> {
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
         let bucket_index = hasher.finish() as usize % NUM_BUCKETS;
@@ -173,14 +223,17 @@ impl<
                 let val = node.value;
                 let prev = self.get_prev(curr_node);
                 let next = self.get_next(curr_node);
-                self.allocator.clear_register(curr_node, PREV);
-                self.allocator.clear_register(curr_node, NEXT);
+                self.allocator
+                    .clear_register(curr_node, NodeField::Left as u32);
+                self.allocator
+                    .clear_register(curr_node, NodeField::Right as u32);
                 self.allocator.remove_node(curr_node);
                 if head == curr_node {
                     assert!(prev == SENTINEL);
                     self.buckets[bucket_index] = next;
                 }
-                self.allocator.connect(prev, next, NEXT, PREV);
+                self.allocator
+                    .connect(prev, next, NodeField::Right as u32, NodeField::Left as u32);
                 return Some(val);
             } else {
                 curr_node = self.get_next(curr_node);
@@ -234,9 +287,20 @@ impl<
                 let prev = self.get_prev(curr_node);
                 let next = self.get_next(curr_node);
                 if curr_node != head {
-                    self.allocator.clear_register(curr_node, PREV);
-                    self.allocator.connect(prev, next, NEXT, PREV);
-                    self.allocator.connect(curr_node, head, NEXT, PREV);
+                    self.allocator
+                        .clear_register(curr_node, NodeField::Left as u32);
+                    self.allocator.connect(
+                        prev,
+                        next,
+                        NodeField::Right as u32,
+                        NodeField::Left as u32,
+                    );
+                    self.allocator.connect(
+                        curr_node,
+                        head,
+                        NodeField::Right as u32,
+                        NodeField::Left as u32,
+                    );
                 }
                 self.buckets[bucket_index] = curr_node;
                 return Some(&mut self.get_node_mut(curr_node).value);
@@ -247,7 +311,7 @@ impl<
         None
     }
 
-    pub fn iter(&self) -> HashTableIterator<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
+    pub fn _iter(&self) -> HashTableIterator<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
         HashTableIterator::<K, V, NUM_BUCKETS, MAX_SIZE> {
             ht: self,
             bucket: 0,
@@ -255,7 +319,7 @@ impl<
         }
     }
 
-    pub fn iter_mut(&mut self) -> HashTableIteratorMut<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
+    pub fn _iter_mut(&mut self) -> HashTableIteratorMut<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
         let node = self.buckets[0];
         HashTableIteratorMut::<K, V, NUM_BUCKETS, MAX_SIZE> {
             ht: self,

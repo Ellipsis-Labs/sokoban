@@ -1,9 +1,10 @@
 use bytemuck::{Pod, Zeroable};
-use node_allocator::{NodeAllocator, ZeroCopy, SENTINEL};
 use std::{
     cmp::max,
     ops::{Index, IndexMut},
 };
+
+use crate::node_allocator::{FromSlice, NodeAllocator, ZeroCopy, SENTINEL, NodeAllocatorMap};
 
 // The number of registers (the last register is currently not in use).
 const REGISTERS: usize = 4;
@@ -65,7 +66,6 @@ pub struct AVLTree<
     const MAX_SIZE: usize,
 > {
     pub root: u64,
-
     allocator: NodeAllocator<AVLNode<K, V>, MAX_SIZE, REGISTERS>,
 }
 
@@ -96,6 +96,46 @@ impl<
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
+    > FromSlice for AVLTree<K, V, MAX_SIZE>
+{
+    fn new_from_slice(slice: &mut [u8]) -> &mut Self {
+        let tree = Self::load_mut_bytes(slice).unwrap();
+        tree.allocator.initialize();
+        tree
+    }
+}
+
+impl<
+        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_SIZE: usize,
+    > NodeAllocatorMap<K, V> for AVLTree<K, V, MAX_SIZE>
+{
+    fn insert(&mut self, key: K, value: V) -> Option<u32> {
+        self._insert(key, value)
+    }
+
+    fn remove(&mut self, key: &K) -> Option<V> {
+        self._remove(key)
+    }
+
+    fn size(&self) -> usize {
+        self.allocator.size as usize
+    }
+
+    fn iter(&self) -> Box<dyn Iterator<Item = (&K, &V)> + '_> {
+        Box::new(self._iter())
+    }
+
+    fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (&K, &mut V)> + '_> {
+        Box::new(self._iter_mut())
+    }
+}
+
+impl<
+        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_SIZE: usize,
     > Default for AVLTree<K, V, MAX_SIZE>
 {
     fn default() -> Self {
@@ -112,18 +152,8 @@ impl<
         const MAX_SIZE: usize,
     > AVLTree<K, V, MAX_SIZE>
 {
-    pub fn size(&self) -> usize {
-        self.allocator.size as usize
-    }
-
     pub fn new() -> Self {
         Self::default()
-    }
-
-    pub fn new_from_slice(slice: &mut [u8]) -> &mut Self {
-        let tree = Self::load_mut_bytes(slice).unwrap();
-        tree.allocator.initialize();
-        tree
     }
 
     pub fn get_node(&self, node: u32) -> &AVLNode<K, V> {
@@ -150,7 +180,7 @@ impl<
         self.allocator.get_register(node, register as u32)
     }
 
-    pub fn insert(&mut self, key: K, value: V) -> Option<u32> {
+    pub fn _insert(&mut self, key: K, value: V) -> Option<u32> {
         let mut reference_node = self.root as u32;
         let new_node = AVLNode::<K, V>::new(key, value);
         if reference_node == SENTINEL {
@@ -193,7 +223,7 @@ impl<
         Some(reference_node)
     }
 
-    pub fn remove(&mut self, key: &K) -> Option<V> {
+    pub fn _remove(&mut self, key: &K) -> Option<V> {
         let mut node_index = self.root as u32;
         if node_index == SENTINEL {
             return None;
@@ -476,7 +506,7 @@ impl<
         return Some(&self.get_node(node).value);
     }
 
-    pub fn iter(&self) -> AVLTreeIterator<'_, K, V, MAX_SIZE> {
+    pub fn _iter(&self) -> AVLTreeIterator<'_, K, V, MAX_SIZE> {
         AVLTreeIterator::<K, V, MAX_SIZE> {
             tree: self,
             stack: vec![],
@@ -484,7 +514,7 @@ impl<
         }
     }
 
-    pub fn iter_mut(&mut self) -> AVLTreeIteratorMut<'_, K, V, MAX_SIZE> {
+    pub fn _iter_mut(&mut self) -> AVLTreeIteratorMut<'_, K, V, MAX_SIZE> {
         let node = self.root as u32;
         AVLTreeIteratorMut::<K, V, MAX_SIZE> {
             tree: self,

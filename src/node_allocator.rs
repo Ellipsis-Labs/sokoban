@@ -1,9 +1,50 @@
 use bytemuck::{Pod, Zeroable};
+use std::mem::{align_of, size_of};
+use num_derive::FromPrimitive;
+
+// Enum representing the fields of a tree node:
+// 0 - left pointer
+// 1 - right pointer
+// 2 - parent pointer 
+// 3 - value pointer (index of leaf) 
+#[derive(Debug, Copy, Clone, PartialEq, FromPrimitive)]
+pub enum TreeField {
+    Left = 0,
+    Right = 1,
+    Parent = 2,
+    Value = 3,
+}
+
+// Enum representing the fields of a simple node (Linked List / Binary Tree):
+// 0 - left pointer
+// 1 - right pointer
+#[derive(Debug, Copy, Clone, PartialEq, FromPrimitive)]
+pub enum NodeField {
+    Left = 0,
+    Right = 1,
+}
+
+pub trait FromSlice {
+    fn new_from_slice(data: &mut [u8]) -> &mut Self;
+}
+
+pub trait NodeAllocatorMap<K, V> {
+    fn insert(&mut self, key: K, value: V) -> Option<u32>;
+    fn remove(&mut self, key: &K) -> Option<V>;
+    fn size(&self) -> usize; 
+    fn iter(&self) -> Box<dyn Iterator<Item = (&K, &V)> + '_>;
+    fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (&K, &mut V)> + '_>;
+}
 
 pub trait ZeroCopy: Pod {
     fn load_mut_bytes<'a>(data: &'a mut [u8]) -> Option<&'a mut Self> {
         let size = std::mem::size_of::<Self>();
         bytemuck::try_from_bytes_mut(&mut data[..size]).ok()
+    }
+
+    fn load_bytes<'a>(data: &'a [u8]) -> Option<&'a Self> {
+        let size = std::mem::size_of::<Self>();
+        bytemuck::try_from_bytes(&data[..size]).ok()
     }
 }
 
@@ -145,17 +186,37 @@ impl<
 
     #[inline(always)]
     fn assert_proper_alignemnt(&self) {
-        let reg_size = 4 * NUM_REGISTERS;
+        let reg_size = size_of::<u32>() * NUM_REGISTERS;
         let self_ptr = std::slice::from_ref(self).as_ptr() as usize;
-        let self_align = std::mem::align_of::<Self>();
-        let t_index = self_ptr + 16 + reg_size;
-        let t_align = std::mem::align_of::<T>();
-        let t_size = std::mem::size_of::<T>();
-        assert!(self_ptr % self_align as usize == 0);
-        assert!(t_size % t_align == 0);
-        assert!(t_size == 0 || t_size >= self_align);
-        assert!(t_index % t_align == 0);
-        assert!((t_index + t_size + reg_size) % t_align == 0);
+        let node_ptr = std::slice::from_ref(&self.nodes).as_ptr() as usize;
+        let self_align = align_of::<Self>();
+        let t_index = node_ptr + reg_size;
+        let t_align = align_of::<T>();
+        let t_size = size_of::<T>();
+        assert!(
+            self_ptr % self_align as usize == 0,
+            "NodeAllocator alignment mismatch, address is {} which is not a multiple of the struct alignment ({})",
+            self_ptr,
+            self_align,
+        );
+        assert!(
+            t_size % t_align == 0,
+            "Size of T ({}) is not a multiple of the alignment of T ({})",
+            t_size,
+            t_align,
+        );
+        assert!(
+            t_size == 0 || t_size >= self_align,
+            "Size of T ({}) must be >= than the alignment of NodeAllocator ({})",
+            t_size,
+            self_align,
+        );
+        assert!(node_ptr == self_ptr + 16, "Nodes are misaligned");
+        assert!(t_index % t_align == 0, "First index of T is misaligned");
+        assert!(
+            (t_index + t_size + reg_size) % t_align == 0,
+            "Subsequent indices of T are misaligned"
+        );
     }
 
     pub fn initialize(&mut self) {
