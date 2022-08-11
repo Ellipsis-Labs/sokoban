@@ -2,7 +2,7 @@
 Compact, efficient data structures in contiguous byte arrays.
 
 ## DISCLAIMER
-This is unaudited code, and still very rough around the edges. Proceed with caution before using any of these data structures in a production system. I highly encourage feedback, suggestions, issues, and PRs :smiley:
+This is unaudited code, and still very rough around the edges. Proceed with caution before using any of these data structures in a production system.
 
 ### Benchmarks
 Based on simple benchmarks, the naive performance of Sokoban data structures are on par, but slightly slower, than the Rust Standard Library. Critbit is the exception for small sizes, but this should not be surprising as the insertion is amortized O(1) with very few reorgs of the data.
