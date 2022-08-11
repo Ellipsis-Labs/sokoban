@@ -147,6 +147,10 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         self.allocator.size as usize
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn iter(&self) -> DequeIterator<'_, T, MAX_SIZE> {
         DequeIterator::<T, MAX_SIZE> {
             deque: self,

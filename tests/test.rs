@@ -2,9 +2,9 @@ use bytemuck::Pod;
 use bytemuck::Zeroable;
 use itertools::Itertools;
 use rand::rngs::ThreadRng;
+use rand::seq::SliceRandom;
 use rand::thread_rng;
 use rand::{self, Rng};
-use rand::seq::SliceRandom;
 use sokoban::node_allocator::FromSlice;
 use sokoban::node_allocator::NodeAllocatorMap;
 use sokoban::*;
@@ -33,7 +33,7 @@ impl Widget {
     }
 }
 
-fn simulate<'a, T>(expect_sorted: bool)
+fn simulate<T>(expect_sorted: bool)
 where
     T: FromSlice + NodeAllocatorMap<u128, Widget>,
 {

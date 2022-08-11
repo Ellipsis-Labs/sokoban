@@ -1,13 +1,13 @@
 use bytemuck::{Pod, Zeroable};
-use std::mem::{align_of, size_of};
 use num_derive::FromPrimitive;
+use std::mem::{align_of, size_of};
 
 /// Enum representing the fields of a tree node:
 /// 0 - left pointer
 /// 1 - right pointer
-/// 2 - parent pointer 
-/// 3 - value pointer (index of leaf) 
-#[derive(Debug, Copy, Clone, PartialEq, FromPrimitive)]
+/// 2 - parent pointer
+/// 3 - value pointer (index of leaf)
+#[derive(Debug, Copy, Clone, PartialEq, Eq, FromPrimitive)]
 pub enum TreeField {
     Left = 0,
     Right = 1,
@@ -18,7 +18,7 @@ pub enum TreeField {
 /// Enum representing the fields of a simple node (Linked List / Binary Tree):
 /// 0 - left pointer
 /// 1 - right pointer
-#[derive(Debug, Copy, Clone, PartialEq, FromPrimitive)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, FromPrimitive)]
 pub enum NodeField {
     Left = 0,
     Right = 1,
@@ -35,18 +35,18 @@ pub trait NodeAllocatorMap<K, V> {
     fn insert(&mut self, key: K, value: V) -> Option<u32>;
     fn remove(&mut self, key: &K) -> Option<V>;
     fn contains(&self, key: &K) -> bool;
-    fn size(&self) -> usize; 
+    fn size(&self) -> usize;
     fn iter(&self) -> Box<dyn Iterator<Item = (&K, &V)> + '_>;
     fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (&K, &mut V)> + '_>;
 }
 
 pub trait ZeroCopy: Pod {
-    fn load_mut_bytes<'a>(data: &'a mut [u8]) -> Option<&'a mut Self> {
+    fn load_mut_bytes(data: &'_ mut [u8]) -> Option<&'_ mut Self> {
         let size = std::mem::size_of::<Self>();
         bytemuck::try_from_bytes_mut(&mut data[..size]).ok()
     }
 
-    fn load_bytes<'a>(data: &'a [u8]) -> Option<&'a Self> {
+    fn load_bytes(data: &'_ [u8]) -> Option<&'_ Self> {
         let size = std::mem::size_of::<Self>();
         bytemuck::try_from_bytes(&data[..size]).ok()
     }

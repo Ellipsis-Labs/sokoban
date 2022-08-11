@@ -152,15 +152,6 @@ impl<
     > HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
 {
     fn assert_proper_alignment() {
-        #[cfg(any(target_arch = "x86", target_arch = "wasm32"))]
-        assert!(std::mem::size_of::<Self>() % 4 as usize == 0);
-        #[cfg(any(target_arch = "x86", target_arch = "wasm32"))]
-        assert!(std::mem::size_of::<HashNode<K, V>>() % 4 as usize == 0);
-        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-        assert!(std::mem::size_of::<Self>() % 8 as usize == 0);
-        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-        assert!(std::mem::size_of::<HashNode<K, V>>() % 8 as usize == 0);
-        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
         assert!(NUM_BUCKETS % 2 == 0);
     }
 
@@ -180,11 +171,11 @@ impl<
         self.allocator.get(index).get_value()
     }
 
-    pub fn get_node_mut(&mut self, index: u32) -> &mut HashNode<K, V> {
+    fn get_node_mut(&mut self, index: u32) -> &mut HashNode<K, V> {
         self.allocator.get_mut(index).get_value_mut()
     }
 
-    pub fn _insert(&mut self, key: K, value: V) -> Option<u32> {
+    fn _insert(&mut self, key: K, value: V) -> Option<u32> {
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
         let bucket_index = hasher.finish() as usize % NUM_BUCKETS;
@@ -315,7 +306,7 @@ impl<
         None
     }
 
-    pub fn _iter(&self) -> HashTableIterator<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
+    fn _iter(&self) -> HashTableIterator<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
         HashTableIterator::<K, V, NUM_BUCKETS, MAX_SIZE> {
             ht: self,
             bucket: 0,
@@ -323,7 +314,7 @@ impl<
         }
     }
 
-    pub fn _iter_mut(&mut self) -> HashTableIteratorMut<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
+    fn _iter_mut(&mut self) -> HashTableIteratorMut<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
         let node = self.buckets[0];
         HashTableIteratorMut::<K, V, NUM_BUCKETS, MAX_SIZE> {
             ht: self,
@@ -430,7 +421,7 @@ impl<
     type Output = V;
 
     fn index(&self, index: &K) -> &Self::Output {
-        &self.get(index).unwrap()
+        self.get(index).unwrap()
     }
 }
 

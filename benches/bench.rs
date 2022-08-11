@@ -4,8 +4,8 @@ extern crate test;
 
 #[cfg(test)]
 mod bench_tests {
-    use rand::{self, Rng};
     use rand::seq::SliceRandom;
+    use rand::{self, Rng};
     use sokoban::node_allocator::FromSlice;
     use sokoban::node_allocator::NodeAllocatorMap;
     use sokoban::*;
@@ -99,7 +99,6 @@ mod bench_tests {
             }
         })
     }
-
 
     #[bench]
     fn bench_std_btree_map_insert_20000_u128(b: &mut Bencher) {

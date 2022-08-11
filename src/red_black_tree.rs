@@ -12,7 +12,7 @@ pub const ALIGNMENT: u32 = 8;
 // Register aliases
 pub const COLOR: u32 = Field::Value as u32;
 
-#[derive(Debug, Copy, Clone, PartialEq, FromPrimitive)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, FromPrimitive)]
 pub enum Color {
     Black = 0,
     Red = 1,
@@ -159,10 +159,10 @@ impl<
     > RedBlackTree<K, V, MAX_SIZE>
 {
     fn assert_proper_alignment() {
-        // TODO is this a sufficient coverage of the edge cases? 
+        // TODO is this a sufficient coverage of the edge cases?
         assert!(std::mem::size_of::<V>() % std::mem::align_of::<K>() == 0);
         assert!(std::mem::size_of::<RBNode<K, V>>() % std::mem::align_of::<RBNode<K, V>>() == 0);
-        assert!(std::mem::size_of::<RBNode<K, V>>() % 8 as usize == 0);
+        assert!(std::mem::size_of::<RBNode<K, V>>() % 8_usize == 0);
     }
 
     pub fn new() -> Self {
@@ -231,7 +231,7 @@ impl<
     }
 
     #[inline(always)]
-    pub fn connect(&mut self, parent: u32, child: u32, dir: u32) {
+    fn connect(&mut self, parent: u32, child: u32, dir: u32) {
         self.allocator
             .connect(parent, child, dir, Field::Parent as u32);
     }
@@ -311,7 +311,7 @@ impl<
         Some(())
     }
 
-    pub fn _insert(&mut self, key: K, value: V) -> Option<u32> {
+    fn _insert(&mut self, key: K, value: V) -> Option<u32> {
         let mut reference_node = self.root as u32;
         let new_node = RBNode::<K, V>::new(key, value);
         if reference_node == SENTINEL {
@@ -386,7 +386,7 @@ impl<
         Some(())
     }
 
-    pub fn _remove(&mut self, key: &K) -> Option<V> {
+    fn _remove(&mut self, key: &K) -> Option<V> {
         let mut ref_node_index = self.root as u32;
         if ref_node_index == SENTINEL {
             return None;
@@ -442,10 +442,8 @@ impl<
                     .clear_register(ref_node_index, Field::Parent as u32);
                 self.allocator.clear_register(delete_node_index, COLOR);
                 self.allocator.remove_node(delete_node_index);
-                if is_black {
-                    if self.fix_remove(pivot_node_index) == None {
-                        return None;
-                    }
+                if is_black && self.fix_remove(pivot_node_index) == None {
+                    return None;
                 }
                 return Some(ref_value);
             };
@@ -527,7 +525,7 @@ impl<
         node
     }
 
-    pub fn _iter(&self) -> RedBlackTreeIterator<'_, K, V, MAX_SIZE> {
+    fn _iter(&self) -> RedBlackTreeIterator<'_, K, V, MAX_SIZE> {
         RedBlackTreeIterator::<K, V, MAX_SIZE> {
             tree: self,
             stack: vec![],
@@ -535,7 +533,7 @@ impl<
         }
     }
 
-    pub fn _iter_mut(&mut self) -> RedBlackTreeIteratorMut<'_, K, V, MAX_SIZE> {
+    fn _iter_mut(&mut self) -> RedBlackTreeIteratorMut<'_, K, V, MAX_SIZE> {
         let node = self.root as u32;
         RedBlackTreeIteratorMut::<K, V, MAX_SIZE> {
             tree: self,
@@ -577,7 +575,7 @@ impl<
                 return Some((&node.key, &node.value));
             }
         }
-        return None;
+        None
     }
 }
 
@@ -618,7 +616,7 @@ impl<
                 }
             }
         }
-        return None;
+        None
     }
 }
 
@@ -631,7 +629,7 @@ impl<
     type Output = V;
 
     fn index(&self, index: &K) -> &Self::Output {
-        &self.get(index).unwrap()
+        self.get(index).unwrap()
     }
 }
 

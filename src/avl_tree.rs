@@ -4,7 +4,7 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-use crate::node_allocator::{FromSlice, NodeAllocator, ZeroCopy, SENTINEL, NodeAllocatorMap};
+use crate::node_allocator::{FromSlice, NodeAllocator, NodeAllocatorMap, ZeroCopy, SENTINEL};
 
 // The number of registers (the last register is currently not in use).
 const REGISTERS: usize = 4;
@@ -15,7 +15,7 @@ const REGISTERS: usize = 4;
 // 2 - height of the (sub-)tree
 // TODO: add parent reference using the additional register (tree traversal
 // currently does not need this)
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Field {
     Left = 0,
     Right = 1,
@@ -184,7 +184,7 @@ impl<
         self.allocator.get_register(node, register as u32)
     }
 
-    pub fn _insert(&mut self, key: K, value: V) -> Option<u32> {
+    fn _insert(&mut self, key: K, value: V) -> Option<u32> {
         let mut reference_node = self.root as u32;
         let new_node = AVLNode::<K, V>::new(key, value);
         if reference_node == SENTINEL {
@@ -227,7 +227,7 @@ impl<
         Some(reference_node)
     }
 
-    pub fn _remove(&mut self, key: &K) -> Option<V> {
+    fn _remove(&mut self, key: &K) -> Option<V> {
         let mut node_index = self.root as u32;
         if node_index == SENTINEL {
             return None;
@@ -510,7 +510,7 @@ impl<
         return Some(&self.get_node(node).value);
     }
 
-    pub fn _iter(&self) -> AVLTreeIterator<'_, K, V, MAX_SIZE> {
+    fn _iter(&self) -> AVLTreeIterator<'_, K, V, MAX_SIZE> {
         AVLTreeIterator::<K, V, MAX_SIZE> {
             tree: self,
             stack: vec![],
@@ -518,7 +518,7 @@ impl<
         }
     }
 
-    pub fn _iter_mut(&mut self) -> AVLTreeIteratorMut<'_, K, V, MAX_SIZE> {
+    fn _iter_mut(&mut self) -> AVLTreeIteratorMut<'_, K, V, MAX_SIZE> {
         let node = self.root as u32;
         AVLTreeIteratorMut::<K, V, MAX_SIZE> {
             tree: self,
@@ -560,7 +560,7 @@ impl<
                 return Some((&node.key, &node.value));
             }
         }
-        return None;
+        None
     }
 }
 
@@ -601,7 +601,7 @@ impl<
                 }
             }
         }
-        return None;
+        None
     }
 }
 
