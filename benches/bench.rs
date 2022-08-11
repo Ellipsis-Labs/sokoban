@@ -22,11 +22,11 @@ mod bench_tests {
     type AVLTreeMap = AVLTree<u128, u128, MAX_SIZE>;
     type CritbitTree = Critbit<u128, NUM_NODES, MAX_SIZE>;
 
-    const NUM_BUCKETS_1K: usize = 1001 >> 2;
+    const NUM_BUCKETS_1K: usize = 1000;
     const NUM_NODES_1K: usize = (1001 << 1) + 1;
 
     type RBTree1K = RedBlackTree<u128, u128, 1001>;
-    type SHashMap1K = HashTable<u128, u128, NUM_BUCKETS_1K, 1001>;
+    type SHashMap1K = HashTable<u128, u128, NUM_BUCKETS_1K, 2001>;
     type AVLTreeMap1K = AVLTree<u128, u128, 1001>;
     type CritbitTree1K = Critbit<u128, NUM_NODES_1K, 1001>;
 
