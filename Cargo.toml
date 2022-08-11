@@ -1,11 +1,22 @@
 [package]
 name = "lib-sokoban"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "Sokoban: compact, efficient data structures packed into contiguous byte arrays"
 license = "MIT OR Apache-2.0"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "sokoban"
+path = "src/lib.rs"
+test = true
+doctest = true
+bench = true
+doc = true
+proc-macro = false
+harness = true
+edition = "2021"
+crate-type = ["lib"]
+required-features = []
 
 [dependencies]
 bytemuck = "1.11.0"
@@ -17,4 +28,4 @@ num-traits = "0.2.15"
 rand_distr = "0.4.3"
 itertools = "0.10.3"
 rand = "0.7"
-tokio = { version = "1.8.4", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.8.4", features = ["full"] }
