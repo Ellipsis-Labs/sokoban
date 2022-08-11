@@ -5,9 +5,9 @@ use rand::rngs::ThreadRng;
 use rand::thread_rng;
 use rand::{self, Rng};
 use rand::seq::SliceRandom;
-use sokoban::node_allocator::FromSlice;
-use sokoban::node_allocator::NodeAllocatorMap;
-use sokoban::*;
+use lib_sokoban::node_allocator::FromSlice;
+use lib_sokoban::node_allocator::NodeAllocatorMap;
+use lib_sokoban::*;
 use std::collections::BTreeMap;
 
 const MAX_SIZE: usize = 20001;

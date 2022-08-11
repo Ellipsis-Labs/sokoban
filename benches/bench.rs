@@ -6,9 +6,9 @@ extern crate test;
 mod bench_tests {
     use rand::{self, Rng};
     use rand::seq::SliceRandom;
-    use sokoban::node_allocator::FromSlice;
-    use sokoban::node_allocator::NodeAllocatorMap;
-    use sokoban::*;
+    use lib_sokoban::node_allocator::FromSlice;
+    use lib_sokoban::node_allocator::NodeAllocatorMap;
+    use lib_sokoban::*;
     use std::collections::BTreeMap;
     use std::collections::HashMap;
     use test::Bencher;
