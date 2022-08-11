@@ -119,6 +119,10 @@ impl<
         self._remove(key)
     }
 
+    fn contains(&self, key: &K) -> bool {
+        self.get(key).is_some()
+    }
+
     fn size(&self) -> usize {
         self.allocator.size as usize
     }

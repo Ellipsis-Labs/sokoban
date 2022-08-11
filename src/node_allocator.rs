@@ -2,11 +2,11 @@ use bytemuck::{Pod, Zeroable};
 use std::mem::{align_of, size_of};
 use num_derive::FromPrimitive;
 
-// Enum representing the fields of a tree node:
-// 0 - left pointer
-// 1 - right pointer
-// 2 - parent pointer 
-// 3 - value pointer (index of leaf) 
+/// Enum representing the fields of a tree node:
+/// 0 - left pointer
+/// 1 - right pointer
+/// 2 - parent pointer 
+/// 3 - value pointer (index of leaf) 
 #[derive(Debug, Copy, Clone, PartialEq, FromPrimitive)]
 pub enum TreeField {
     Left = 0,
@@ -15,22 +15,26 @@ pub enum TreeField {
     Value = 3,
 }
 
-// Enum representing the fields of a simple node (Linked List / Binary Tree):
-// 0 - left pointer
-// 1 - right pointer
+/// Enum representing the fields of a simple node (Linked List / Binary Tree):
+/// 0 - left pointer
+/// 1 - right pointer
 #[derive(Debug, Copy, Clone, PartialEq, FromPrimitive)]
 pub enum NodeField {
     Left = 0,
     Right = 1,
 }
 
+/// This is a convenience trait that exposes an interface to read a struct from an arbitrary byte array
 pub trait FromSlice {
     fn new_from_slice(data: &mut [u8]) -> &mut Self;
 }
 
+/// This trait allows allows for templated functions on map data structures that use the NodeAllocator
+/// struct as the underlying container
 pub trait NodeAllocatorMap<K, V> {
     fn insert(&mut self, key: K, value: V) -> Option<u32>;
     fn remove(&mut self, key: &K) -> Option<V>;
+    fn contains(&self, key: &K) -> bool;
     fn size(&self) -> usize; 
     fn iter(&self) -> Box<dyn Iterator<Item = (&K, &V)> + '_>;
     fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (&K, &mut V)> + '_>;

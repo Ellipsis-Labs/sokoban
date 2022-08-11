@@ -135,6 +135,10 @@ impl<
         self._remove(key)
     }
 
+    fn contains(&self, key: &K) -> bool {
+        self.get(key).is_some()
+    }
+
     fn size(&self) -> usize {
         self.allocator.size as usize
     }
@@ -409,8 +413,6 @@ impl<
                         .clear_register(ref_node_index, Field::Left as u32);
                     (left, ref_node_index)
                 } else {
-                    assert!(self.get_parent(self.get_left(ref_node_index)) == ref_node_index);
-                    assert!(self.get_parent(self.get_right(ref_node_index)) == ref_node_index);
                     let min_right = self.find_min(right);
                     let min_right_child = self.get_right(min_right);
                     is_black = self.is_black(min_right);
@@ -438,7 +440,6 @@ impl<
                 };
                 self.allocator
                     .clear_register(ref_node_index, Field::Parent as u32);
-                assert!(self.is_leaf(delete_node_index));
                 self.allocator.clear_register(delete_node_index, COLOR);
                 self.allocator.remove_node(delete_node_index);
                 if is_black {

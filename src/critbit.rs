@@ -88,6 +88,10 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         self._remove(key)
     }
 
+    fn contains(&self, key: &u128) -> bool {
+        self.get(*key).is_some()
+    }
+
     fn size(&self) -> usize {
         self.leaves.size as usize
     }
