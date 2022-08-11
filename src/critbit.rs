@@ -364,6 +364,9 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         let mut parent = self.root as u32;
         let mut child: u32;
         let mut is_right: bool;
+        if self.size() == 0 {
+            return None;
+        }
         if self.is_inner_node(parent) {
             let node = self.get_node(parent);
             let (c, ir) = self.get_child(node.prefix_len, parent, *key);

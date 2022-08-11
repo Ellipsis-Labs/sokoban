@@ -4,6 +4,7 @@ use itertools::Itertools;
 use rand::rngs::ThreadRng;
 use rand::thread_rng;
 use rand::{self, Rng};
+use rand::seq::SliceRandom;
 use sokoban::node_allocator::FromSlice;
 use sokoban::node_allocator::NodeAllocatorMap;
 use sokoban::*;
@@ -63,57 +64,67 @@ where
     let v = Widget::new_random(&mut rng);
     assert!(tree.insert(k, v) == None);
 
-    for k in keys.iter() {
+    let mut rand_keys = keys.clone();
+    rand_keys.shuffle(&mut rng);
+
+    for k in rand_keys.iter() {
         assert!(tree.remove(k) != None);
         s -= 1;
         map.remove(k);
     }
+
+    assert!(tree.size() == 0);
     keys = vec![];
 
-    for _i in 0..(MAX_SIZE >> 1) {
-        let k = rng.gen::<u128>();
-        let v = Widget::new_random(&mut rng);
-        assert!(tree.insert(k, v) != None);
-        s += 1;
-        map.insert(k, v);
-        keys.push(k);
-    }
-
-    for _ in 0..100000 {
+    for _ in 0..100 {
         assert!(s == tree.size());
         let sample = rng.gen::<f64>();
         if sample < 0.33 {
-            if tree.size() >= MAX_SIZE - 1 {
+            let remaining_slots = MAX_SIZE - 1 - tree.size();
+            if remaining_slots == 0 {
                 continue;
             }
-            let k = rng.gen::<u128>();
-            let v = Widget::new_random(&mut rng);
-            assert!(tree.insert(k, v) != None);
-            s += 1;
-            map.insert(k, v);
-            keys.push(k);
+            let num_samples = rng.gen_range(0, remaining_slots);
+            for _ in 0..num_samples {
+                assert!(tree.size() < MAX_SIZE - 1);
+                let k = rng.gen::<u128>();
+                let v = Widget::new_random(&mut rng);
+                assert!(tree.insert(k, v) != None);
+                s += 1;
+                map.insert(k, v);
+                keys.push(k);
+            }
         } else if sample < 0.66 {
-            if keys.is_empty() {
+            if tree.size() < 2 {
                 continue;
             }
-            let j = rng.gen_range(0, keys.len());
-            let key = keys[j];
-            keys.swap_remove(j);
-            // assert!(rbt[&key] == map[&key]);
-            assert!(tree.remove(&key) != None);
-            map.remove(&key);
-            s -= 1;
+            let num_samples = rng.gen_range(0, tree.size() / 2);
+            for _ in 0..num_samples {
+                assert!(!keys.is_empty());
+                let j = rng.gen_range(0, keys.len());
+                let key = keys[j];
+                keys.swap_remove(j);
+                // assert!(rbt[&key] == map[&key]);
+                assert!(tree.remove(&key) != None);
+                map.remove(&key);
+                s -= 1;
+            }
         } else {
-            if keys.is_empty() {
+            if tree.size() == 0 {
                 continue;
             }
-            let j = rng.gen_range(0, keys.len());
-            let key = keys[j];
-            let v = Widget::new_random(&mut rng);
-            assert!(tree.insert(key, v) != None);
-            map.insert(key, v);
+            let num_samples = rng.gen_range(0, tree.size());
+            for _ in 0..num_samples {
+                assert!(!keys.is_empty());
+                let j = rng.gen_range(0, keys.len());
+                let key = keys[j];
+                let v = Widget::new_random(&mut rng);
+                assert!(tree.insert(key, v) != None);
+                map.insert(key, v);
+            }
         }
     }
+    println!("{} Size: {}", std::any::type_name::<T>(), tree.size(),);
 
     if expect_sorted {
         for ((k1, v1), (k2, v2)) in map.iter().zip(tree.iter()) {

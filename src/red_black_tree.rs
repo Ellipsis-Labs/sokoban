@@ -64,6 +64,7 @@ pub struct RedBlackTree<
     const MAX_SIZE: usize,
 > {
     pub root: u64,
+    _padding: u64,
     allocator: NodeAllocator<RBNode<K, V>, MAX_SIZE, 4>,
 }
 
@@ -100,6 +101,7 @@ impl<
         Self::assert_proper_alignment();
         RedBlackTree {
             root: SENTINEL as u64,
+            _padding: 0,
             allocator: NodeAllocator::<RBNode<K, V>, MAX_SIZE, 4>::default(),
         }
     }
@@ -153,13 +155,9 @@ impl<
     > RedBlackTree<K, V, MAX_SIZE>
 {
     fn assert_proper_alignment() {
-        #[cfg(any(target_arch = "x86", target_arch = "wasm32"))]
-        assert!(std::mem::size_of::<Self>() % 4 as usize == 0);
-        #[cfg(any(target_arch = "x86", target_arch = "wasm32"))]
-        assert!(std::mem::size_of::<RBNode<K, V>>() % 4 as usize == 0);
-        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-        assert!(std::mem::size_of::<Self>() % 8 as usize == 0);
-        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        // TODO is this a sufficient coverage of the edge cases? 
+        assert!(std::mem::size_of::<V>() % std::mem::align_of::<K>() == 0);
+        assert!(std::mem::size_of::<RBNode<K, V>>() % std::mem::align_of::<RBNode<K, V>>() == 0);
         assert!(std::mem::size_of::<RBNode<K, V>>() % 8 as usize == 0);
     }
 
@@ -451,13 +449,13 @@ impl<
                 return Some(ref_value);
             };
             if target == SENTINEL {
-                println!("Key not found in tree");
                 return None;
             }
             ref_node_index = target
         }
     }
 
+    #[inline(always)]
     fn transplant(&mut self, target: u32, source: u32) {
         let parent = self.get_parent(target);
         if parent == SENTINEL {
