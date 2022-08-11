@@ -2,6 +2,8 @@
 name = "lib-sokoban"
 version = "0.1.3"
 edition = "2021"
+repository = "https://github.com/jarry-xiao/sokoban"
+authors = ["jarry-xiao <jarry.xiao@gmail.com>"]
 description = "Sokoban: compact, efficient data structures packed into contiguous byte arrays"
 license = "MIT OR Apache-2.0"
 
