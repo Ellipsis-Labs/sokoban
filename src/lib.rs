@@ -4,6 +4,7 @@ pub mod deque;
 pub mod hash_table;
 pub mod node_allocator;
 pub mod red_black_tree;
+pub mod heap;
 
 pub use avl_tree::AVLTree;
 pub use critbit::Critbit;
