@@ -284,6 +284,25 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         value
     }
 
+    pub fn get_addr(&self, key: u128) -> u32 {
+        let mut node_index = self.root as u32;
+        loop {
+            let node = self.get_node(node_index);
+            if !self.is_inner_node(node_index) {
+                if node.key == key {
+                    return node_index;
+                } else {
+                    return SENTINEL;
+                }
+            }
+            let shared_prefix_len = (node.key ^ key).leading_zeros() as u64;
+            if shared_prefix_len >= node.prefix_len {
+                node_index = self.get_child(node.prefix_len, node_index, key).0;
+                continue;
+            }
+        }
+    }
+
     pub fn get(&self, key: u128) -> Option<&V> {
         let mut node_index = self.root as u32;
         loop {

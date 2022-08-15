@@ -467,6 +467,27 @@ impl<
         self.connect(parent, source, dir);
     }
 
+    pub fn get_addr(&self, key: &K) -> u32 {
+        let mut reference_node = self.root as u32;
+        if reference_node == SENTINEL {
+            return SENTINEL;
+        }
+        loop {
+            let ref_value = self.allocator.get(reference_node).get_value().key;
+            let target = if *key < ref_value {
+                self.get_left(reference_node)
+            } else if *key > ref_value {
+                self.get_right(reference_node)
+            } else {
+                return reference_node;
+            };
+            if target == SENTINEL {
+                return SENTINEL;
+            }
+            reference_node = target
+        }
+    }
+
     pub fn get(&self, key: &K) -> Option<&V> {
         let mut reference_node = self.root as u32;
         if reference_node == SENTINEL {

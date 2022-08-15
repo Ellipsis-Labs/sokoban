@@ -253,6 +253,22 @@ impl<
         false
     }
 
+    pub fn get_addr(&self, key: &K) -> u32 {
+        let mut hasher = DefaultHasher::new();
+        key.hash(&mut hasher);
+        let bucket_index = hasher.finish() as usize % NUM_BUCKETS;
+        let mut curr_node = self.buckets[bucket_index];
+        while curr_node != SENTINEL {
+            let node = self.get_node(curr_node);
+            if node.key == *key {
+                return curr_node;
+            } else {
+                curr_node = self.get_next(curr_node);
+            }
+        }
+        SENTINEL 
+    }
+
     pub fn get(&self, key: &K) -> Option<&V> {
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
