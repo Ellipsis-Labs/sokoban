@@ -619,9 +619,9 @@ impl<
 }
 
 impl<
-        const MAX_SIZE: usize,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_SIZE: usize,
     > IndexMut<&K> for AVLTree<K, V, MAX_SIZE>
 {
     fn index_mut(&mut self, index: &K) -> &mut Self::Output {
