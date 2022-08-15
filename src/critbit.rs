@@ -2,7 +2,7 @@ use bytemuck::{Pod, Zeroable};
 use std::ops::{Index, IndexMut};
 
 use crate::node_allocator::{
-    FromSlice, NodeAllocator, NodeAllocatorMap, TreeField as Field, ZeroCopy, SENTINEL,
+    FromSlice, NodeAllocator, NodeAllocatorMap, TreeField as Field, ZeroCopy, SENTINEL, OrderedNodeAllocatorMap,
 };
 
 #[repr(C)]
@@ -102,6 +102,41 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
 
     fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (&u128, &mut V)> + '_> {
         Box::new(self._iter_mut())
+    }
+}
+
+
+impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
+    OrderedNodeAllocatorMap<u128, V> for Critbit<V, NUM_NODES, MAX_SIZE>
+{
+    fn get_min_index(&mut self) -> u32 {
+        self.find_min(self.root as u32)
+    }
+
+    fn get_max_index(&mut self) -> u32 {
+        self.find_max(self.root as u32)
+    }
+
+    fn get_min(&mut self) -> Option<(u128, V)> {
+        match self.get_min_index() {
+            SENTINEL => None,
+            i => {
+                let node = self.get_node(i);
+                let leaf = self.get_leaf(self.get_leaf_index(i));
+                Some((node.key, *leaf))
+            }
+        }
+    }
+
+    fn get_max(&mut self) -> Option<(u128, V)> {
+        match self.get_max_index() {
+            SENTINEL => None,
+            i => {
+                let node = self.get_node(i);
+                let leaf = self.get_leaf(self.get_leaf_index(i));
+                Some((node.key, *leaf))
+            }
+        }
     }
 }
 
@@ -430,6 +465,22 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         assert!(nsize - self.node_allocator.size == 2);
         assert!(lsize - self.leaves.size == 1);
         Some(leaf)
+    }
+
+    fn find_min(&self, index: u32) -> u32 {
+        let mut node = index;
+        while self.get_left(node) != SENTINEL {
+            node = self.get_left(node);
+        }
+        node
+    }
+
+    fn find_max(&self, index: u32) -> u32 {
+        let mut node = index;
+        while self.get_right(node) != SENTINEL {
+            node = self.get_right(node);
+        }
+        node
     }
 
     fn _iter(&self) -> CritbitIterator<'_, V, NUM_NODES, MAX_SIZE> {

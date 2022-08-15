@@ -4,7 +4,8 @@ use num_traits::FromPrimitive;
 use std::ops::{Index, IndexMut};
 
 use crate::node_allocator::{
-    FromSlice, NodeAllocator, NodeAllocatorMap, TreeField as Field, ZeroCopy, SENTINEL,
+    FromSlice, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap, TreeField as Field,
+    ZeroCopy, SENTINEL,
 };
 
 pub const ALIGNMENT: u32 = 8;
@@ -149,6 +150,41 @@ impl<
 
     fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (&K, &mut V)> + '_> {
         Box::new(self._iter_mut())
+    }
+}
+
+impl<
+        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_SIZE: usize,
+    > OrderedNodeAllocatorMap<K, V> for RedBlackTree<K, V, MAX_SIZE>
+{
+    fn get_min_index(&mut self) -> u32 {
+        self.find_min(self.root as u32)
+    }
+
+    fn get_max_index(&mut self) -> u32 {
+        self.find_max(self.root as u32)
+    }
+
+    fn get_min(&mut self) -> Option<(K, V)> {
+        match self.get_min_index() {
+            SENTINEL => None,
+            i => {
+                let node = self.get_node(i);
+                Some((node.key, node.value))
+            }
+        }
+    }
+
+    fn get_max(&mut self) -> Option<(K, V)> {
+        match self.get_max_index() {
+            SENTINEL => None,
+            i => {
+                let node = self.get_node(i);
+                Some((node.key, node.value))
+            }
+        }
     }
 }
 
@@ -530,7 +566,7 @@ impl<
         }
     }
 
-    pub fn find_min(&self, index: u32) -> u32 {
+    fn find_min(&self, index: u32) -> u32 {
         let mut node = index;
         while self.get_left(node) != SENTINEL {
             node = self.get_left(node);
@@ -538,7 +574,7 @@ impl<
         node
     }
 
-    pub fn find_max(&self, index: u32) -> u32 {
+    fn find_max(&self, index: u32) -> u32 {
         let mut node = index;
         while self.get_right(node) != SENTINEL {
             node = self.get_right(node);

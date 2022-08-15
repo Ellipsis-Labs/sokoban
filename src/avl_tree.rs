@@ -4,7 +4,7 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-use crate::node_allocator::{FromSlice, NodeAllocator, NodeAllocatorMap, ZeroCopy, SENTINEL};
+use crate::node_allocator::{FromSlice, NodeAllocator, NodeAllocatorMap, ZeroCopy, SENTINEL, OrderedNodeAllocatorMap};
 
 // The number of registers (the last register is currently not in use).
 const REGISTERS: usize = 4;
@@ -133,6 +133,41 @@ impl<
 
     fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (&K, &mut V)> + '_> {
         Box::new(self._iter_mut())
+    }
+}
+
+impl<
+        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_SIZE: usize,
+    > OrderedNodeAllocatorMap<K, V> for AVLTree<K, V, MAX_SIZE>
+{
+    fn get_min_index(&mut self) -> u32 {
+        self.find_min_index()
+    }
+
+    fn get_max_index(&mut self) -> u32 {
+        self.find_max_index()
+    }
+
+    fn get_min(&mut self) -> Option<(K, V)> {
+        match self.get_min_index() {
+            SENTINEL => None,
+            i => {
+                let node = self.get_node(i);
+                Some((node.key, node.value))
+            }
+        }
+    }
+
+    fn get_max(&mut self) -> Option<(K, V)> {
+        match self.get_max_index() {
+            SENTINEL => None,
+            i => {
+                let node = self.get_node(i);
+                Some((node.key, node.value))
+            }
+        }
     }
 }
 
@@ -446,6 +481,27 @@ impl<
         }
     }
 
+    pub fn get_addr(&self, key: &K) -> u32 {
+        let mut reference_node = self.root as u32;
+        if reference_node == SENTINEL {
+            return SENTINEL;
+        }
+        loop {
+            let ref_value = self.allocator.get(reference_node).get_value().key;
+            let target = if *key < ref_value {
+                self.get_field(reference_node, Field::Left)
+            } else if *key > ref_value {
+                self.get_field(reference_node, Field::Right)
+            } else {
+                return reference_node;
+            };
+            if target == SENTINEL {
+                return SENTINEL;
+            }
+            reference_node = target
+        }
+    }
+
     pub fn get(&self, key: &K) -> Option<&V> {
         let mut reference_node = self.root as u32;
         if reference_node == SENTINEL {
@@ -488,26 +544,44 @@ impl<
         }
     }
 
-    pub fn min(&self) -> Option<&V> {
+    pub fn find_min_index(&self) -> u32 {
         if self.root as u32 == SENTINEL {
-            return None;
+            return SENTINEL;
         }
         let mut node = self.root as u32;
         while self.get_field(node, Field::Left) != SENTINEL {
             node = self.get_field(node, Field::Left);
         }
-        return Some(&self.get_node(node).value);
+        return node;
     }
 
-    pub fn max(&self) -> Option<&V> {
+    pub fn find_max_index(&self) -> u32 {
         if self.root as u32 == SENTINEL {
-            return None;
+            return SENTINEL;
         }
         let mut node = self.root as u32;
         while self.get_field(node, Field::Right) != SENTINEL {
             node = self.get_field(node, Field::Right);
         }
-        return Some(&self.get_node(node).value);
+        return node;
+    }
+
+    pub fn find_min(&self) -> Option<&V> {
+        let node = self.find_min_index();
+        if node == SENTINEL {
+            None
+        } else{
+            Some(&self.get_node(node).value)
+        }
+    }
+
+    pub fn find_max(&self) -> Option<&V> {
+        let node = self.find_max_index();
+        if node == SENTINEL {
+            None
+        } else{
+            Some(&self.get_node(node).value)
+        }
     }
 
     fn _iter(&self) -> AVLTreeIterator<'_, K, V, MAX_SIZE> {
