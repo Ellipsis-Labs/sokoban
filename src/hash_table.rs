@@ -49,7 +49,6 @@ pub struct HashTable<
     const NUM_BUCKETS: usize,
     const MAX_SIZE: usize,
 > {
-    pub sequence_number: u64,
     pub buckets: [u32; NUM_BUCKETS],
     pub allocator: NodeAllocator<HashNode<K, V>, MAX_SIZE, 2>,
 }
@@ -90,7 +89,6 @@ impl<
     fn default() -> Self {
         Self::assert_proper_alignment();
         HashTable {
-            sequence_number: 0,
             buckets: [SENTINEL; NUM_BUCKETS],
             allocator: NodeAllocator::<HashNode<K, V>, MAX_SIZE, 2>::default(),
         }
@@ -139,7 +137,7 @@ impl<
     fn new_from_slice(slice: &mut [u8]) -> &mut Self {
         Self::assert_proper_alignment();
         let tab = Self::load_mut_bytes(slice).unwrap();
-        tab.allocator.initialize();
+        tab.initialize();
         tab
     }
 }
@@ -153,6 +151,10 @@ impl<
 {
     fn assert_proper_alignment() {
         assert!(NUM_BUCKETS % 2 == 0);
+    }
+
+    pub fn initialize(&mut self) {
+        self.allocator.initialize();
     }
 
     pub fn new() -> Self {
@@ -171,7 +173,7 @@ impl<
         self.allocator.get(index).get_value()
     }
 
-    fn get_node_mut(&mut self, index: u32) -> &mut HashNode<K, V> {
+    pub fn get_node_mut(&mut self, index: u32) -> &mut HashNode<K, V> {
         self.allocator.get_mut(index).get_value_mut()
     }
 
@@ -251,6 +253,22 @@ impl<
             }
         }
         false
+    }
+
+    pub fn get_addr(&self, key: &K) -> u32 {
+        let mut hasher = DefaultHasher::new();
+        key.hash(&mut hasher);
+        let bucket_index = hasher.finish() as usize % NUM_BUCKETS;
+        let mut curr_node = self.buckets[bucket_index];
+        while curr_node != SENTINEL {
+            let node = self.get_node(curr_node);
+            if node.key == *key {
+                return curr_node;
+            } else {
+                curr_node = self.get_next(curr_node);
+            }
+        }
+        SENTINEL 
     }
 
     pub fn get(&self, key: &K) -> Option<&V> {

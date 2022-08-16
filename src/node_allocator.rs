@@ -40,6 +40,15 @@ pub trait NodeAllocatorMap<K, V> {
     fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (&K, &mut V)> + '_>;
 }
 
+/// This trait allows allows for templated functions on sorted map data structures that use the NodeAllocator
+/// struct as the underlying container
+pub trait OrderedNodeAllocatorMap<K, V>: NodeAllocatorMap<K, V> {
+    fn get_min_index(&mut self) -> u32;
+    fn get_max_index(&mut self) -> u32;
+    fn get_min(&mut self) -> Option<(K, V)>;
+    fn get_max(&mut self) -> Option<(K, V)>;
+}
+
 pub trait ZeroCopy: Pod {
     fn load_mut_bytes(data: &'_ mut [u8]) -> Option<&'_ mut Self> {
         let size = std::mem::size_of::<Self>();
@@ -279,11 +288,11 @@ impl<
     #[inline(always)]
     pub fn disconnect(&mut self, i: u32, j: u32, r_i: u32, r_j: u32) {
         if i != SENTINEL {
-            assert!(j == self.get_register(i, r_i), "Nodes are not connected");
+            // assert!(j == self.get_register(i, r_i), "Nodes are not connected");
             self.clear_register(i, r_i);
         }
         if j != SENTINEL {
-            assert!(i == self.get_register(j, r_j), "Nodes are not connected");
+            // assert!(i == self.get_register(j, r_j), "Nodes are not connected");
             self.clear_register(j, r_j);
         }
     }

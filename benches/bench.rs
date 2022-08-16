@@ -101,6 +101,50 @@ mod bench_tests {
     }
 
     #[bench]
+    fn bench_sokoban_red_black_tree_insert_1000_u128_stack(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut m = RBTree1K::new();
+        b.iter(|| {
+            for v in 0..1000 {
+                m.insert(v as u128, rng.gen::<u128>());
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_sokoban_hash_map_insert_1000_u128_stack(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut m = SHashMap1K::new();
+        b.iter(|| {
+            for v in 0..1000 {
+                m.insert(v as u128, rng.gen::<u128>());
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_sokoban_critbit_insert_1000_u128_stack(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut m = CritbitTree1K::new();
+        b.iter(|| {
+            for v in 0..1000 {
+                m.insert(v as u128, rng.gen::<u128>());
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_sokoban_avl_tree_insert_1000_u128_stack(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut m = AVLTreeMap1K::new();
+        b.iter(|| {
+            for v in 0..1000 {
+                m.insert(v as u128, rng.gen::<u128>());
+            }
+        })
+    }
+
+    #[bench]
     fn bench_std_btree_map_insert_20000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut m = BTreeMap::new();

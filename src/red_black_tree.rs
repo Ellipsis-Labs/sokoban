@@ -4,7 +4,8 @@ use num_traits::FromPrimitive;
 use std::ops::{Index, IndexMut};
 
 use crate::node_allocator::{
-    FromSlice, NodeAllocator, NodeAllocatorMap, TreeField as Field, ZeroCopy, SENTINEL,
+    FromSlice, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap, TreeField as Field,
+    ZeroCopy, SENTINEL,
 };
 
 pub const ALIGNMENT: u32 = 8;
@@ -116,7 +117,7 @@ impl<
     fn new_from_slice(slice: &mut [u8]) -> &mut Self {
         Self::assert_proper_alignment();
         let tree = Self::load_mut_bytes(slice).unwrap();
-        tree.allocator.initialize();
+        tree.initialize();
         tree
     }
 }
@@ -156,6 +157,41 @@ impl<
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
+    > OrderedNodeAllocatorMap<K, V> for RedBlackTree<K, V, MAX_SIZE>
+{
+    fn get_min_index(&mut self) -> u32 {
+        self.find_min(self.root as u32)
+    }
+
+    fn get_max_index(&mut self) -> u32 {
+        self.find_max(self.root as u32)
+    }
+
+    fn get_min(&mut self) -> Option<(K, V)> {
+        match self.get_min_index() {
+            SENTINEL => None,
+            i => {
+                let node = self.get_node(i);
+                Some((node.key, node.value))
+            }
+        }
+    }
+
+    fn get_max(&mut self) -> Option<(K, V)> {
+        match self.get_max_index() {
+            SENTINEL => None,
+            i => {
+                let node = self.get_node(i);
+                Some((node.key, node.value))
+            }
+        }
+    }
+}
+
+impl<
+        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_SIZE: usize,
     > RedBlackTree<K, V, MAX_SIZE>
 {
     fn assert_proper_alignment() {
@@ -169,11 +205,16 @@ impl<
         Self::default()
     }
 
+    #[inline(always)]
+    pub fn initialize(&mut self) {
+        self.allocator.initialize();
+    }
+
     pub fn get_node(&self, node: u32) -> &RBNode<K, V> {
         self.allocator.get(node).get_value()
     }
 
-    fn get_node_mut(&mut self, node: u32) -> &mut RBNode<K, V> {
+    pub fn get_node_mut(&mut self, node: u32) -> &mut RBNode<K, V> {
         self.allocator.get_mut(node).get_value_mut()
     }
 
@@ -241,10 +282,8 @@ impl<
         let left = self.get_left(parent);
         let right = self.get_right(parent);
         if child == left {
-            assert!(self.get_parent(child) == parent);
             Field::Left as u32
         } else if child == right {
-            assert!(self.get_parent(child) == parent);
             Field::Right as u32
         } else {
             panic!("Nodes are not connected");
@@ -467,6 +506,27 @@ impl<
         self.connect(parent, source, dir);
     }
 
+    pub fn get_addr(&self, key: &K) -> u32 {
+        let mut reference_node = self.root as u32;
+        if reference_node == SENTINEL {
+            return SENTINEL;
+        }
+        loop {
+            let ref_value = self.allocator.get(reference_node).get_value().key;
+            let target = if *key < ref_value {
+                self.get_left(reference_node)
+            } else if *key > ref_value {
+                self.get_right(reference_node)
+            } else {
+                return reference_node;
+            };
+            if target == SENTINEL {
+                return SENTINEL;
+            }
+            reference_node = target
+        }
+    }
+
     pub fn get(&self, key: &K) -> Option<&V> {
         let mut reference_node = self.root as u32;
         if reference_node == SENTINEL {
@@ -509,7 +569,7 @@ impl<
         }
     }
 
-    pub fn find_min(&self, index: u32) -> u32 {
+    fn find_min(&self, index: u32) -> u32 {
         let mut node = index;
         while self.get_left(node) != SENTINEL {
             node = self.get_left(node);
@@ -517,7 +577,7 @@ impl<
         node
     }
 
-    pub fn find_max(&self, index: u32) -> u32 {
+    fn find_max(&self, index: u32) -> u32 {
         let mut node = index;
         while self.get_right(node) != SENTINEL {
             node = self.get_right(node);
@@ -634,9 +694,9 @@ impl<
 }
 
 impl<
-        const MAX_SIZE: usize,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_SIZE: usize,
     > IndexMut<&K> for RedBlackTree<K, V, MAX_SIZE>
 {
     fn index_mut(&mut self, index: &K) -> &mut Self::Output {
