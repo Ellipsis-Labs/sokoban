@@ -164,3 +164,172 @@ async fn test_simulate_critbit() {
     type CritbitTree = Critbit<Widget, NUM_NODES, MAX_SIZE>;
     simulate::<CritbitTree>(true);
 }
+
+#[cfg(test)]
+pub mod binary_heap_test {
+    use rand::prelude::*;
+    use sokoban::binary_heap::*;
+    use std::collections::BinaryHeap;
+    use std::ops::DerefMut;
+    use std::vec;
+
+    #[test]
+    fn max_heap_test() {
+        const MAX_SIZE: usize = 10001;
+        let mut heap = Heap::<u64, u64, MAX_SIZE>::default();
+        let mut s = heap.size;
+        let mut rng = rand::thread_rng();
+        let mut vals: Vec<u64> = vec![];
+
+        for _ in 0..(MAX_SIZE) {
+            let n: u64 = rng.gen::<u64>();
+            heap._push(n.into());
+            vals.push(n.into());
+            s += 1;
+            assert!(s == heap._size());
+        }
+
+        assert_eq!(Some(&heap.nodes[0].key), vals.iter().max());
+
+        for _ in 0..(MAX_SIZE / 2) {
+            let old_max = heap.nodes[0].key;
+            let index = vals.iter().position(|x| *x == old_max).unwrap();
+            vals.remove(index);
+            heap._pop(); // this is the problem
+            let new_max = heap.nodes[0].key;
+            assert_eq!(vals.iter().max(), Some(&new_max));
+            s -= 1;
+            assert!(s == heap._size());
+        }
+    }
+
+    #[test]
+    fn min_heap_test() {
+        const MAX_SIZE: usize = 10001;
+        let mut heap = Heap::<u64, u64, MAX_SIZE>::default();
+        let mut s = heap.size;
+        let mut rng = rand::thread_rng();
+        let mut vals: Vec<u64> = vec![];
+
+        for _ in 0..(MAX_SIZE) {
+            let n: u64 = rng.gen::<u64>();
+            heap._push_min(n.into());
+            vals.push(n.into());
+            s += 1;
+            assert!(s == heap._size());
+        }
+        assert_eq!(Some(&heap.nodes[0].key), vals.iter().min());
+    }
+
+    #[test]
+    fn test_adds() {
+        let mut rng = rand::thread_rng();
+        let mut heap = Heap::<u128, u128, 20001>::default();
+        for _ in 0..20000 {
+            heap._push(rng.gen::<u128>());
+        }
+        assert_eq!(heap.size, 20000)
+    }
+
+    #[test]
+    fn mapping_test() {
+        let mut heap = Heap::<u32, u32, 10>::default();
+
+        heap._push(5);
+        heap._push(5);
+        heap._push(10);
+
+        assert_eq!(heap._size(), 3);
+        assert_eq!(heap._is_empty(), false);
+        assert_eq!(heap.nodes[0].key, 10);
+
+        println!("{:?}", heap.nodes)
+    }
+
+    #[test]
+    fn test_against_normal_heap() {
+        let mut std_heap = BinaryHeap::<u8>::new();
+        let mut rng = rand::thread_rng();
+        let mut sokoban_heap = Heap::<u8, u8, 20>::default();
+        let mut vals: Vec<u8> = vec![];
+
+        for _ in 0..10 {
+            let rand = rng.gen::<u8>();
+            std_heap.push(rand);
+            sokoban_heap._push(rand);
+            vals.push(rand);
+        }
+
+        let mut vector = std_heap.into_sorted_vec().into_iter();
+
+        let mut stdheaparr: [u8; 100] = [1; 100];
+
+        for i in 0..sokoban_heap.size {
+            stdheaparr[i as usize] = vector.next().unwrap();
+        }
+        let finalstd: Vec<&u8> = stdheaparr.iter().collect();
+
+        let mut sokoban_heap_arr: [u8; 100] = [1; 100];
+
+        for i in 0..10 {
+            sokoban_heap_arr[i] = sokoban_heap.nodes[i].key;
+        }
+
+        println!("REVERSE STD");
+
+        println!("{:?}", finalstd);
+
+        println!("SOKOBAN HEAP");
+
+        println!("{:?}", sokoban_heap_arr);
+
+        println!("ORDER OF PUSH");
+
+        println!("{:?}", vals);
+
+        // for i in 0..sokoban_heap.size as usize {
+        //     if Some(sokoban_heap.nodes[i].v) != vector.next() {
+        //         panic!("not equal!")
+        //     }
+        // }
+
+        // let m1: [i32; 5] = [1,2,3,4,5];
+        // let m2 : [i32; 5] = m1.iter().rev().collect();
+    }
+
+    #[test]
+    fn peek_mut_test() {
+        let mut heap = Heap::<u32, u32, 10>::default();
+
+        heap._push(3);
+        heap._push(5);
+        heap._push(10);
+
+        assert_eq!(heap._size(), 3);
+        assert_eq!(heap._is_empty(), false);
+        assert_eq!(heap.nodes[0].key, 10);
+
+        *heap.peek_mut().unwrap() = 9;
+
+        println!("{:?}", heap.nodes);
+    }
+
+    #[test]
+    fn test_iterator() {
+        let mut heap = Heap::<u32, u32, 4>::default();
+
+        heap._push(3);
+        heap._push(5);
+        heap._push(10);
+
+        assert_eq!(heap._size(), 3);
+        assert_eq!(heap._is_empty(), false);
+        assert_eq!(heap.nodes[0].key, 10);
+
+
+        let iter = heap._iter().next();
+        println!("{:?}", iter)
+            
+        }
+
+    }
