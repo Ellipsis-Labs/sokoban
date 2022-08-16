@@ -192,7 +192,7 @@ impl<
                 curr_node = self.get_next(curr_node);
             }
         }
-        if self.size() >= MAX_SIZE - 1 {
+        if self.size() >= MAX_SIZE {
             return None;
         }
         let node_index = self.allocator.add_node(HashNode::new(key, value));
@@ -420,7 +420,7 @@ impl<
             // TODO: How does one remove this unsafe?
             unsafe {
                 let node =
-                    (*self.ht.allocator.nodes.as_mut_ptr().add(ptr as usize)).get_value_mut();
+                    (*self.ht.allocator.nodes.as_mut_ptr().add((ptr - 1) as usize)).get_value_mut();
                 Some((&node.key, &mut node.value))
             }
         } else {

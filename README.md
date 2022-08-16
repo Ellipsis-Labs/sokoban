@@ -51,8 +51,6 @@ pub struct NodeAllocator<
     bump_index: u32,
     /// Buffer index of the first element in the free list
     free_list_head: u32,
-    /// The first node of the is always reserved for the sentinel node
-    /// so the max capacity is really `MAX_SIZE - 1` 
     pub nodes: [Node<NUM_REGISTERS, T>; MAX_SIZE],
 }
 

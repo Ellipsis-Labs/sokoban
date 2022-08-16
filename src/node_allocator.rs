@@ -130,8 +130,7 @@ pub struct NodeAllocator<
     const MAX_SIZE: usize,
     const NUM_REGISTERS: usize,
 > {
-    /// Size of the allocator. The max value this can take is `MAX_SIZE - 1` because the 0-index is always
-    /// the SENTINEL
+    /// Size of the allocator. The max value this can take is `MAX_SIZE`
     pub size: u64,
     /// Furthest index of the allocator. When this value reaches `MAX_SIZE` this indicates taht all of the nodes
     /// has been used at least once and new allocated indicies must be pulled from the free list.
@@ -245,12 +244,12 @@ impl<
 
     #[inline(always)]
     pub fn get(&self, i: u32) -> &Node<T, NUM_REGISTERS> {
-        &self.nodes[i as usize]
+        &self.nodes[(i - 1) as usize]
     }
 
     #[inline(always)]
     pub fn get_mut(&mut self, i: u32) -> &mut Node<T, NUM_REGISTERS> {
-        &mut self.nodes[i as usize]
+        &mut self.nodes[(i - 1) as usize]
     }
 
     /// Adds a new node to the allocator. The function returns the current pointer
@@ -258,7 +257,7 @@ impl<
     pub fn add_node(&mut self, node: T) -> u32 {
         let i = self.free_list_head;
         if self.free_list_head == self.bump_index {
-            if self.bump_index == MAX_SIZE as u32 {
+            if self.bump_index == (MAX_SIZE + 1) as u32 {
                 panic!("Buffer is full, size {}", self.size);
             }
             self.bump_index += 1;
@@ -299,7 +298,9 @@ impl<
 
     #[inline(always)]
     pub fn clear_register(&mut self, i: u32, r_i: u32) {
-        self.get_mut(i).set_register(r_i as usize, SENTINEL);
+        if i != SENTINEL {
+            self.get_mut(i).set_register(r_i as usize, SENTINEL);
+        }
     }
 
     #[inline(always)]
@@ -321,6 +322,11 @@ impl<
 
     #[inline(always)]
     pub fn get_register(&self, i: u32, r_i: u32) -> u32 {
-        self.get(i).get_register(r_i as usize)
+        if i != SENTINEL {
+            self.get(i).get_register(r_i as usize)
+        } else {
+            SENTINEL
+        }
+        
     }
 }

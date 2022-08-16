@@ -250,7 +250,7 @@ impl<
             };
 
             if reference_node == SENTINEL {
-                if self.size() >= MAX_SIZE - 1 {
+                if self.size() >= MAX_SIZE {
                     return None;
                 }
                 reference_node = self.allocator.add_node(new_node);
@@ -674,7 +674,7 @@ impl<
                 // TODO: How does one remove this unsafe?
                 unsafe {
                     let node =
-                        (*self.tree.allocator.nodes.as_mut_ptr().add(ptr as usize)).get_value_mut();
+                        (*self.tree.allocator.nodes.as_mut_ptr().add((ptr - 1)as usize)).get_value_mut();
                     return Some((&node.key, &mut node.value));
                 }
             }
