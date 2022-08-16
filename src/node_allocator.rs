@@ -327,6 +327,5 @@ impl<
         } else {
             SENTINEL
         }
-        
     }
 }

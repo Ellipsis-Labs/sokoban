@@ -268,7 +268,7 @@ impl<
                 curr_node = self.get_next(curr_node);
             }
         }
-        SENTINEL 
+        SENTINEL
     }
 
     pub fn get(&self, key: &K) -> Option<&V> {

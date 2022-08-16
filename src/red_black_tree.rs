@@ -670,8 +670,13 @@ impl<
                 self.node = self.tree.get_right(ptr);
                 // TODO: How does one remove this unsafe?
                 unsafe {
-                    let node =
-                        (*self.tree.allocator.nodes.as_mut_ptr().add((ptr - 1) as usize)).get_value_mut();
+                    let node = (*self
+                        .tree
+                        .allocator
+                        .nodes
+                        .as_mut_ptr()
+                        .add((ptr - 1) as usize))
+                    .get_value_mut();
                     return Some((&node.key, &mut node.value));
                 }
             }
