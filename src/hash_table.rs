@@ -171,7 +171,7 @@ impl<
         self.allocator.get(index).get_value()
     }
 
-    fn get_node_mut(&mut self, index: u32) -> &mut HashNode<K, V> {
+    pub fn get_node_mut(&mut self, index: u32) -> &mut HashNode<K, V> {
         self.allocator.get_mut(index).get_value_mut()
     }
 

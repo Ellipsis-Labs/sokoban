@@ -193,7 +193,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         self.node_allocator.get_register(node, Field::Parent as u32)
     }
 
-    fn get_node_mut(&mut self, node: u32) -> &mut CritbitNode {
+    pub fn get_node_mut(&mut self, node: u32) -> &mut CritbitNode {
         self.node_allocator.get_mut(node).get_value_mut()
     }
 

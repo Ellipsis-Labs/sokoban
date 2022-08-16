@@ -199,7 +199,7 @@ impl<
         self.allocator.get(node).get_value()
     }
 
-    fn get_node_mut(&mut self, node: u32) -> &mut AVLNode<K, V> {
+    pub fn get_node_mut(&mut self, node: u32) -> &mut AVLNode<K, V> {
         self.allocator.get_mut(node).get_value_mut()
     }
 
