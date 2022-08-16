@@ -100,7 +100,7 @@ impl<
 {
     fn new_from_slice(slice: &mut [u8]) -> &mut Self {
         let tree = Self::load_mut_bytes(slice).unwrap();
-        tree.allocator.initialize();
+        tree.initialize();
         tree
     }
 }
@@ -193,6 +193,10 @@ impl<
 {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn initialize(&mut self) {
+        self.allocator.initialize()
     }
 
     pub fn get_node(&self, node: u32) -> &AVLNode<K, V> {

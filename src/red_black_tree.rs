@@ -117,7 +117,7 @@ impl<
     fn new_from_slice(slice: &mut [u8]) -> &mut Self {
         Self::assert_proper_alignment();
         let tree = Self::load_mut_bytes(slice).unwrap();
-        tree.allocator.initialize();
+        tree.initialize();
         tree
     }
 }
@@ -205,6 +205,11 @@ impl<
         Self::default()
     }
 
+    #[inline(always)]
+    pub fn initialize(&mut self) {
+        self.allocator.initialize();
+    }
+
     pub fn get_node(&self, node: u32) -> &RBNode<K, V> {
         self.allocator.get(node).get_value()
     }
@@ -277,10 +282,8 @@ impl<
         let left = self.get_left(parent);
         let right = self.get_right(parent);
         if child == left {
-            assert!(self.get_parent(child) == parent);
             Field::Left as u32
         } else if child == right {
-            assert!(self.get_parent(child) == parent);
             Field::Right as u32
         } else {
             panic!("Nodes are not connected");

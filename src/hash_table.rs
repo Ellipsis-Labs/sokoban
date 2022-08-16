@@ -49,7 +49,6 @@ pub struct HashTable<
     const NUM_BUCKETS: usize,
     const MAX_SIZE: usize,
 > {
-    pub sequence_number: u64,
     pub buckets: [u32; NUM_BUCKETS],
     pub allocator: NodeAllocator<HashNode<K, V>, MAX_SIZE, 2>,
 }
@@ -90,7 +89,6 @@ impl<
     fn default() -> Self {
         Self::assert_proper_alignment();
         HashTable {
-            sequence_number: 0,
             buckets: [SENTINEL; NUM_BUCKETS],
             allocator: NodeAllocator::<HashNode<K, V>, MAX_SIZE, 2>::default(),
         }
@@ -139,7 +137,7 @@ impl<
     fn new_from_slice(slice: &mut [u8]) -> &mut Self {
         Self::assert_proper_alignment();
         let tab = Self::load_mut_bytes(slice).unwrap();
-        tab.allocator.initialize();
+        tab.initialize();
         tab
     }
 }
@@ -153,6 +151,10 @@ impl<
 {
     fn assert_proper_alignment() {
         assert!(NUM_BUCKETS % 2 == 0);
+    }
+
+    pub fn initialize(&mut self) {
+        self.allocator.initialize();
     }
 
     pub fn new() -> Self {

@@ -288,11 +288,11 @@ impl<
     #[inline(always)]
     pub fn disconnect(&mut self, i: u32, j: u32, r_i: u32, r_j: u32) {
         if i != SENTINEL {
-            assert!(j == self.get_register(i, r_i), "Nodes are not connected");
+            // assert!(j == self.get_register(i, r_i), "Nodes are not connected");
             self.clear_register(i, r_i);
         }
         if j != SENTINEL {
-            assert!(i == self.get_register(j, r_j), "Nodes are not connected");
+            // assert!(i == self.get_register(j, r_j), "Nodes are not connected");
             self.clear_register(j, r_j);
         }
     }

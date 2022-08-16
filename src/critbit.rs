@@ -71,8 +71,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         assert!(NUM_NODES >= 2 * MAX_SIZE);
         Self::assert_proper_alignment();
         let tree = Self::load_mut_bytes(slice).unwrap();
-        tree.node_allocator.initialize();
-        tree.leaves.initialize();
+        tree.initialize();
         tree
     }
 }
@@ -152,6 +151,11 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     pub fn new() -> Self {
         Self::assert_proper_alignment();
         Self::default()
+    }
+
+    pub fn initialize(&mut self) {
+        self.node_allocator.initialize();
+        self.leaves.initialize();
     }
 
     pub fn get_leaf(&self, leaf_index: u32) -> &V {
