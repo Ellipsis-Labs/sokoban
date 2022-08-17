@@ -83,7 +83,7 @@ impl<
         const MAX_SIZE: usize,
     > Heap<K, V, MAX_SIZE>
 {
-    pub fn swap_node(arr: &mut [Node<K, V>; MAX_SIZE], parent_idx: usize, added_idx: usize) {
+    fn swap_node(arr: &mut [Node<K, V>; MAX_SIZE], parent_idx: usize, added_idx: usize) {
         let temp = arr[parent_idx];
         arr[parent_idx] = arr[added_idx];
         arr[added_idx] = temp;
@@ -172,7 +172,7 @@ impl<
 
     pub fn _push(&mut self, key: K) {
         if self.size as usize == MAX_SIZE - 1 {
-            println!("Hey! The 'heap is full");
+            println!("The 'heap is full");
             return;
         }
         let node = Node::<K, V> {
@@ -180,19 +180,19 @@ impl<
             value: V::default(),
         };
         self.nodes[self.size as usize] = node;
+        self._heapifyup((self.size) as usize);
         self.size += 1;
-        self._heapifyup((self.size - 1) as usize);
     }
 
     pub fn _pop(&mut self) -> Option<(K, V)> {
-        let K = self.nodes[0].key;
-        let V = self.nodes[0].value;
+        let k = self.nodes[0].key;
+        let v = self.nodes[0].value;
         let lastidx = (self.size - 1) as usize;
         Self::swap_node(&mut self.nodes, 0, lastidx);
         self.nodes[(self.size - 1) as usize] = Node::default();
         self.size -= 1;
         self._heapifydown(0);
-        Some((K, V))
+        Some((k, v))
     }
 
     pub fn _push_min(&mut self, value: K) {
@@ -302,10 +302,6 @@ impl<
     pub fn get_value_mut(&mut self, index: usize) -> &mut V {
         &mut self.nodes[index].value
     }
-
-    pub fn is_right_child(&mut self, index: usize) -> bool {
-        index % 2 == 0
-    }
 }
 
 pub struct PeekMut<
@@ -379,12 +375,15 @@ impl<
 {
     type Item = (K, V);
     fn next(&mut self) -> Option<Self::Item> {
+        let mut next: Option<(K, V)> = Some((K::default(), V::default()));
         if self.current < self.heap.size {
-            return Some((
+            next = Some((
                 self.heap.nodes[self.current as usize].key,
                 self.heap.nodes[self.current as usize].value,
             ));
+            
         }
-        None
+        self.current += 1;
+        next
     }
 }
