@@ -151,6 +151,8 @@ impl<
 {
     fn assert_proper_alignment() {
         assert!(NUM_BUCKETS % 2 == 0);
+        #[cfg(target_arch = "aarch64")]
+        assert!(std::mem::align_of::<HashNode<K, V>>() == 8);
     }
 
     pub fn initialize(&mut self) {

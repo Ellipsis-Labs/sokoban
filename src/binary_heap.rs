@@ -1,15 +1,6 @@
-/*
-General implementation of a heap
-- implement bench tests (fix them)
-- Implement iter
-- Implement a test which proves 1:1 with std::collections::heap
-*/
-
 use bytemuck::{Pod, Zeroable};
 use core::ops::{Deref, DerefMut, Drop};
 use std::cmp::PartialOrd;
-use std::iter::FromIterator;
-use std::{fmt, mem, slice, vec};
 
 #[derive(Debug, Default, Clone, PartialOrd, PartialEq)]
 pub struct Node<K, V> {
@@ -92,7 +83,7 @@ impl<
         const MAX_SIZE: usize,
     > Heap<K, V, MAX_SIZE>
 {
-    fn swap_node(arr: &mut [Node<K, V>; MAX_SIZE], parent_idx: usize, added_idx: usize) {
+    pub fn swap_node(arr: &mut [Node<K, V>; MAX_SIZE], parent_idx: usize, added_idx: usize) {
         let temp = arr[parent_idx];
         arr[parent_idx] = arr[added_idx];
         arr[added_idx] = temp;
@@ -180,6 +171,10 @@ impl<
     }
 
     pub fn _push(&mut self, key: K) {
+        if self.size as usize == MAX_SIZE - 1 {
+            println!("Hey! The 'heap is full");
+            return;
+        }
         let node = Node::<K, V> {
             key: key,
             value: V::default(),
@@ -293,14 +288,23 @@ impl<
         }
     }
 
-    pub fn next(&mut self) -> Option<(K, V)> {
-        self._pop()
+    pub fn _iter(&self) -> BinaryHeapIterator<K, V, MAX_SIZE> {
+        BinaryHeapIterator {
+            heap: *self,
+            current: 0,
+        }
     }
 
-    pub fn _iter(&self) -> BinaryHeapIterator<K, V, MAX_SIZE> {
-        BinaryHeapIterator { 
-            heap: *self, current: 0
-        }
+    pub fn get_value(&self, index: usize) -> V {
+        self.nodes[index].value
+    }
+
+    pub fn get_value_mut(&mut self, index: usize) -> &mut V {
+        &mut self.nodes[index].value
+    }
+
+    pub fn is_right_child(&mut self, index: usize) -> bool {
+        index % 2 == 0
     }
 }
 
@@ -376,13 +380,11 @@ impl<
     type Item = (K, V);
     fn next(&mut self) -> Option<Self::Item> {
         if self.current < self.heap.size {
-            return Some((self.heap.nodes[self.current as usize].key, self.heap.nodes[self.current as usize].value))
+            return Some((
+                self.heap.nodes[self.current as usize].key,
+                self.heap.nodes[self.current as usize].value,
+            ));
         }
         None
     }
-}
-
-pub trait Iterator {
-    type Item;
-    fn next(&mut self) -> Option<Self::Item>;
 }

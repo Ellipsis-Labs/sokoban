@@ -20,7 +20,7 @@ mod bench_tests {
     const NUM_NODES: usize = (MAX_SIZE << 1) + 1;
 
     type RBTree = RedBlackTree<u128, u128, MAX_SIZE>;
-    type SHashMap = HashTable<u128, u128, NUM_BUCKETS, MAX_SIZE>;
+    type SHashMap = HashTable<u64, u64, NUM_BUCKETS, MAX_SIZE>;
     type AVLTreeMap = AVLTree<u128, u128, MAX_SIZE>;
     type CritbitTree = Critbit<u128, NUM_NODES, MAX_SIZE>;
     type SokobanHeap = Heap<u128, u128, MAX_SIZE>;
@@ -29,7 +29,7 @@ mod bench_tests {
     const NUM_NODES_1K: usize = (1001 << 1) + 1;
 
     type RBTree1K = RedBlackTree<u128, u128, 1001>;
-    type SHashMap1K = HashTable<u128, u128, NUM_BUCKETS_1K, 2001>;
+    type SHashMap1K = HashTable<u64, u64, NUM_BUCKETS_1K, 2001>;
     type AVLTreeMap1K = AVLTree<u128, u128, 1001>;
     type CritbitTree1K = Critbit<u128, NUM_NODES_1K, 1001>;
     type SokobanHeap1K = Heap<u128, u128, 1001>;
@@ -75,7 +75,7 @@ mod bench_tests {
         let m = SHashMap1K::new_from_slice(buf.as_mut_slice());
         b.iter(|| {
             for v in 0..1000 {
-                m.insert(v as u128, rng.gen::<u128>());
+                m.insert(v as u64, rng.gen::<u64>());
             }
         })
     }
@@ -145,7 +145,7 @@ mod bench_tests {
         let m = SHashMap::new_from_slice(buf.as_mut_slice());
         b.iter(|| {
             for v in 0..20000 {
-                m.insert(v as u128, rng.gen::<u128>());
+                m.insert(v as u64, rng.gen::<u64>());
             }
         })
     }
@@ -228,11 +228,11 @@ mod bench_tests {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; std::mem::size_of::<SHashMap>()];
         let m = SHashMap::new_from_slice(buf.as_mut_slice());
-        let mut slice: Vec<u128> = (0..1000).collect();
+        let mut slice: Vec<u64> = (0..1000).collect();
         slice.shuffle(&mut rng);
         b.iter(|| {
             for v in 0..1000 {
-                m.insert(v as u128, rng.gen::<u128>());
+                m.insert(v as u64, rng.gen::<u64>());
             }
             for k in slice.iter() {
                 m.remove(k);
@@ -333,7 +333,7 @@ mod bench_tests {
     #[bench]
     fn bench_sokoban_binary_heap_insert_20000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
-        let mut sokoban_heap = Heap::<u128, u128, MAX_SIZE>::default();
+        let mut sokoban_heap = Heap::<u128, u128, 1001>::default();
 
         b.iter(|| {
             for v in 0..1000 {

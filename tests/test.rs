@@ -170,7 +170,6 @@ pub mod binary_heap_test {
     use rand::prelude::*;
     use sokoban::binary_heap::*;
     use std::collections::BinaryHeap;
-    use std::ops::DerefMut;
     use std::vec;
 
     #[test]
@@ -222,79 +221,51 @@ pub mod binary_heap_test {
     }
 
     #[test]
-    fn test_adds() {
-        let mut rng = rand::thread_rng();
-        let mut heap = Heap::<u128, u128, 20001>::default();
-        for _ in 0..20000 {
-            heap._push(rng.gen::<u128>());
-        }
-        assert_eq!(heap.size, 20000)
-    }
-
-    #[test]
-    fn mapping_test() {
-        let mut heap = Heap::<u32, u32, 10>::default();
-
-        heap._push(5);
-        heap._push(5);
-        heap._push(10);
-
-        assert_eq!(heap._size(), 3);
-        assert_eq!(heap._is_empty(), false);
-        assert_eq!(heap.nodes[0].key, 10);
-
-        println!("{:?}", heap.nodes)
-    }
-
-    #[test]
     fn test_against_normal_heap() {
-        let mut std_heap = BinaryHeap::<u8>::new();
+        const MAX_SIZE: usize = 15;
+        let mut std_heap = BinaryHeap::<u128>::new();
         let mut rng = rand::thread_rng();
-        let mut sokoban_heap = Heap::<u8, u8, 20>::default();
-        let mut vals: Vec<u8> = vec![];
+        let mut sokoban_heap = Heap::<u128, u128, MAX_SIZE>::default();
+        let mut vals: Vec<u128> = vec![];
 
-        for _ in 0..10 {
-            let rand = rng.gen::<u8>();
+        for _ in 0..(MAX_SIZE - 1) {
+            let rand = rng.gen::<u128>();
             std_heap.push(rand);
             sokoban_heap._push(rand);
             vals.push(rand);
         }
 
-        let mut vector = std_heap.into_sorted_vec().into_iter();
+        let mut stl_heap_to_vector = std_heap.into_vec().into_iter();
 
-        let mut stdheaparr: [u8; 100] = [1; 100];
+        let mut std_heap_arr: [u128; MAX_SIZE] = [1; MAX_SIZE];
 
         for i in 0..sokoban_heap.size {
-            stdheaparr[i as usize] = vector.next().unwrap();
+            std_heap_arr[i as usize] = stl_heap_to_vector.next().unwrap();
         }
-        let finalstd: Vec<&u8> = stdheaparr.iter().collect();
 
-        let mut sokoban_heap_arr: [u8; 100] = [1; 100];
+        let mut sokoban_heap_arr:  [u128; MAX_SIZE] = [1; MAX_SIZE];
 
-        for i in 0..10 {
+        for i in 0..(MAX_SIZE - 1) {
             sokoban_heap_arr[i] = sokoban_heap.nodes[i].key;
         }
 
-        println!("REVERSE STD");
+        println!("STL Heap");
 
-        println!("{:?}", finalstd);
+        println!("{:?}", std_heap_arr);
 
-        println!("SOKOBAN HEAP");
+        println!("SOKOBAN Heap");
 
         println!("{:?}", sokoban_heap_arr);
 
-        println!("ORDER OF PUSH");
+        println!("Vector, in order of pushes!");
 
         println!("{:?}", vals);
 
-        // for i in 0..sokoban_heap.size as usize {
-        //     if Some(sokoban_heap.nodes[i].v) != vector.next() {
-        //         panic!("not equal!")
-        //     }
-        // }
-
-        // let m1: [i32; 5] = [1,2,3,4,5];
-        // let m2 : [i32; 5] = m1.iter().rev().collect();
+        for i in 0..sokoban_heap.size as usize {
+            if Some(sokoban_heap.nodes[i].key) != Some(std_heap_arr[i]) {
+                panic!("not equal!")
+            }
+        }
     }
 
     #[test]
@@ -315,7 +286,7 @@ pub mod binary_heap_test {
     }
 
     #[test]
-    fn test_iterator() {
+    fn iter_test() {
         let mut heap = Heap::<u32, u32, 4>::default();
 
         heap._push(3);
@@ -326,10 +297,7 @@ pub mod binary_heap_test {
         assert_eq!(heap._is_empty(), false);
         assert_eq!(heap.nodes[0].key, 10);
 
-
-        let iter = heap._iter().next();
-        println!("{:?}", iter)
-            
-        }
-
+        let next = heap._iter().next();
+        println!("{:?}", next)
     }
+}
