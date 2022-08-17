@@ -6,8 +6,8 @@ pub mod node_allocator;
 pub mod red_black_tree;
 pub mod binary_heap;
 
-pub use node_allocator::NodeAllocatorMap;
 pub use node_allocator::FromSlice;
+pub use node_allocator::NodeAllocatorMap;
 
 pub use avl_tree::AVLTree;
 pub use critbit::Critbit;

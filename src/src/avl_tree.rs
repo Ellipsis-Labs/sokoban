@@ -4,7 +4,9 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-use crate::node_allocator::{FromSlice, NodeAllocator, NodeAllocatorMap, ZeroCopy, SENTINEL, OrderedNodeAllocatorMap};
+use crate::node_allocator::{
+    FromSlice, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap, ZeroCopy, SENTINEL,
+};
 
 // The number of registers (the last register is currently not in use).
 const REGISTERS: usize = 4;
@@ -250,7 +252,7 @@ impl<
             };
 
             if reference_node == SENTINEL {
-                if self.size() >= MAX_SIZE - 1 {
+                if self.size() >= MAX_SIZE {
                     return None;
                 }
                 reference_node = self.allocator.add_node(new_node);
@@ -556,7 +558,7 @@ impl<
         while self.get_field(node, Field::Left) != SENTINEL {
             node = self.get_field(node, Field::Left);
         }
-        return node;
+        node
     }
 
     pub fn find_max_index(&self) -> u32 {
@@ -567,14 +569,14 @@ impl<
         while self.get_field(node, Field::Right) != SENTINEL {
             node = self.get_field(node, Field::Right);
         }
-        return node;
+        node
     }
 
     pub fn find_min(&self) -> Option<&V> {
         let node = self.find_min_index();
         if node == SENTINEL {
             None
-        } else{
+        } else {
             Some(&self.get_node(node).value)
         }
     }
@@ -583,7 +585,7 @@ impl<
         let node = self.find_max_index();
         if node == SENTINEL {
             None
-        } else{
+        } else {
             Some(&self.get_node(node).value)
         }
     }
@@ -673,8 +675,13 @@ impl<
                 self.node = self.tree.get_field(ptr, Field::Right);
                 // TODO: How does one remove this unsafe?
                 unsafe {
-                    let node =
-                        (*self.tree.allocator.nodes.as_mut_ptr().add(ptr as usize)).get_value_mut();
+                    let node = (*self
+                        .tree
+                        .allocator
+                        .nodes
+                        .as_mut_ptr()
+                        .add((ptr - 1) as usize))
+                    .get_value_mut();
                     return Some((&node.key, &mut node.value));
                 }
             }

@@ -10,7 +10,7 @@ use sokoban::node_allocator::NodeAllocatorMap;
 use sokoban::*;
 use std::collections::BTreeMap;
 
-const MAX_SIZE: usize = 20001;
+const MAX_SIZE: usize = 20000;
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
@@ -43,14 +43,14 @@ where
         "{} Memory Size: {}, Capacity: {}",
         std::any::type_name::<T>(),
         std::mem::size_of::<T>(),
-        MAX_SIZE - 1
+        MAX_SIZE
     );
     let mut rng = thread_rng();
     let mut keys = vec![];
     let mut map = Box::new(BTreeMap::new());
     let mut s = 0;
     let mut v;
-    for _ in 0..(MAX_SIZE - 1) {
+    for _ in 0..(MAX_SIZE) {
         let k = rng.gen::<u128>();
         v = Widget::new_random(&mut rng);
         assert!(tree.insert(k, v) != None);
@@ -80,13 +80,13 @@ where
         assert!(s == tree.size());
         let sample = rng.gen::<f64>();
         if sample < 0.33 {
-            let remaining_slots = MAX_SIZE - 1 - tree.size();
+            let remaining_slots = MAX_SIZE - tree.size();
             if remaining_slots == 0 {
                 continue;
             }
             let num_samples = rng.gen_range(0, remaining_slots);
             for _ in 0..num_samples {
-                assert!(tree.size() < MAX_SIZE - 1);
+                assert!(tree.size() < MAX_SIZE);
                 let k = rng.gen::<u128>();
                 let v = Widget::new_random(&mut rng);
                 assert!(tree.insert(k, v) != None);
@@ -137,6 +137,25 @@ where
             assert!(*v1 == *v2);
         }
     }
+
+    let mut new_map = BTreeMap::new();
+    for (k, v) in tree.iter_mut() {
+        let w = Widget::new_random(&mut rng);
+        *v = w;
+        new_map.insert(*k, w);
+    }
+
+    if expect_sorted {
+        for ((k1, v1), (k2, v2)) in new_map.iter().zip(tree.iter()) {
+            assert!(*k1 == *k2);
+            assert!(*v1 == *v2);
+        }
+    } else {
+        for ((k1, v1), (k2, v2)) in new_map.iter().zip(tree.iter().sorted()) {
+            assert!(*k1 == *k2);
+            assert!(*v1 == *v2);
+        }
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -160,7 +179,7 @@ async fn test_simulate_avl_tree() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_simulate_critbit() {
-    const NUM_NODES: usize = (MAX_SIZE << 1) + 1;
+    const NUM_NODES: usize = MAX_SIZE << 1;
     type CritbitTree = Critbit<Widget, NUM_NODES, MAX_SIZE>;
     simulate::<CritbitTree>(true);
 }

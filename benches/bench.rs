@@ -6,33 +6,31 @@ extern crate test;
 mod bench_tests {
     use rand::seq::SliceRandom;
     use rand::{self, Rng};
-    use sokoban::binary_heap::Heap;
     use sokoban::node_allocator::FromSlice;
     use sokoban::node_allocator::NodeAllocatorMap;
     use sokoban::*;
     use std::collections::BTreeMap;
-    use std::collections::BinaryHeap;
     use std::collections::HashMap;
     use test::Bencher;
+    use sokoban::binary_heap::Heap;
+    use std::collections::BinaryHeap;
 
     const MAX_SIZE: usize = 20001;
     const NUM_BUCKETS: usize = MAX_SIZE >> 2;
     const NUM_NODES: usize = (MAX_SIZE << 1) + 1;
 
     type RBTree = RedBlackTree<u128, u128, MAX_SIZE>;
-    type SHashMap = HashTable<u64, u64, NUM_BUCKETS, MAX_SIZE>;
+    type SHashMap = HashTable<u128, u128, NUM_BUCKETS, MAX_SIZE>;
     type AVLTreeMap = AVLTree<u128, u128, MAX_SIZE>;
     type CritbitTree = Critbit<u128, NUM_NODES, MAX_SIZE>;
-    type SokobanHeap = Heap<u128, u128, MAX_SIZE>;
 
     const NUM_BUCKETS_1K: usize = 1000;
     const NUM_NODES_1K: usize = (1001 << 1) + 1;
 
     type RBTree1K = RedBlackTree<u128, u128, 1001>;
-    type SHashMap1K = HashTable<u64, u64, NUM_BUCKETS_1K, 2001>;
+    type SHashMap1K = HashTable<u128, u128, NUM_BUCKETS_1K, 2001>;
     type AVLTreeMap1K = AVLTree<u128, u128, 1001>;
     type CritbitTree1K = Critbit<u128, NUM_NODES_1K, 1001>;
-    type SokobanHeap1K = Heap<u128, u128, 1001>;
 
     #[bench]
     fn bench_std_btree_map_insert_1000_u128(b: &mut Bencher) {
@@ -86,7 +84,7 @@ mod bench_tests {
         let m = SHashMap1K::new_from_slice(buf.as_mut_slice());
         b.iter(|| {
             for v in 0..1000 {
-                m.insert(v as u64, rng.gen::<u64>());
+                m.insert(v as u128, rng.gen::<u128>());
             }
         })
     }
@@ -124,6 +122,50 @@ mod bench_tests {
         b.iter(|| {
             for v in 0..1000 {
                 sokoban_heap._push(rng.gen::<u128>());
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_sokoban_red_black_tree_insert_1000_u128_stack(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut m = RBTree1K::new();
+        b.iter(|| {
+            for v in 0..1000 {
+                m.insert(v as u128, rng.gen::<u128>());
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_sokoban_hash_map_insert_1000_u128_stack(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut m = SHashMap1K::new();
+        b.iter(|| {
+            for v in 0..1000 {
+                m.insert(v as u128, rng.gen::<u128>());
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_sokoban_critbit_insert_1000_u128_stack(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut m = CritbitTree1K::new();
+        b.iter(|| {
+            for v in 0..1000 {
+                m.insert(v as u128, rng.gen::<u128>());
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_sokoban_avl_tree_insert_1000_u128_stack(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut m = AVLTreeMap1K::new();
+        b.iter(|| {
+            for v in 0..1000 {
+                m.insert(v as u128, rng.gen::<u128>());
             }
         })
     }
@@ -180,7 +222,7 @@ mod bench_tests {
         let m = SHashMap::new_from_slice(buf.as_mut_slice());
         b.iter(|| {
             for v in 0..20000 {
-                m.insert(v as u64, rng.gen::<u64>());
+                m.insert(v as u128, rng.gen::<u128>());
             }
         })
     }
@@ -237,7 +279,6 @@ mod bench_tests {
         })
     }
 
-
     #[bench]
     fn bench_std_hash_map_remove_1000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
@@ -292,11 +333,11 @@ mod bench_tests {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; std::mem::size_of::<SHashMap>()];
         let m = SHashMap::new_from_slice(buf.as_mut_slice());
-        let mut slice: Vec<u64> = (0..1000).collect();
+        let mut slice: Vec<u128> = (0..1000).collect();
         slice.shuffle(&mut rng);
         b.iter(|| {
             for v in 0..1000 {
-                m.insert(v as u64, rng.gen::<u64>());
+                m.insert(v as u128, rng.gen::<u128>());
             }
             for k in slice.iter() {
                 m.remove(k);
