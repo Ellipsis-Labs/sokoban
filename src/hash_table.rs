@@ -374,6 +374,7 @@ impl<
                 let head = self.ht.buckets[self.bucket];
                 self.node = head;
             }
+            
             let node = self.ht.get_node(self.node);
             self.node = self.ht.get_next(self.node);
             Some((&node.key, &node.value))

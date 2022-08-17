@@ -89,23 +89,19 @@ impl<
         arr[added_idx] = temp;
     }
 
-    pub fn _is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         return self.size == 0;
     }
 
-    pub fn _size(&self) -> u64 {
+    pub fn size(&self) -> u64 {
         return self.size;
     }
 
-    pub fn _peek(&self) -> K {
+    pub fn peek(&self) -> K {
         return self.nodes[0].key;
     }
 
     fn _heapifyup(&mut self, index: usize) {
-        if self.size == 1 {
-            return;
-        }
-
         if index == 0 {
             return;
         }
@@ -170,11 +166,12 @@ impl<
         }
     }
 
-    pub fn _push(&mut self, key: K) {
-        if self.size as usize == MAX_SIZE - 1 {
-            println!("The 'heap is full");
+    pub fn push(&mut self, key: K) {
+        if self.size as usize == MAX_SIZE {
+            println!("The heap is full");
             return;
         }
+
         let node = Node::<K, V> {
             key: key,
             value: V::default(),
@@ -184,7 +181,7 @@ impl<
         self.size += 1;
     }
 
-    pub fn _pop(&mut self) -> Option<(K, V)> {
+    pub fn pop(&mut self) -> Option<(K, V)> {
         let k = self.nodes[0].key;
         let v = self.nodes[0].value;
         let lastidx = (self.size - 1) as usize;
@@ -195,7 +192,7 @@ impl<
         Some((k, v))
     }
 
-    pub fn _push_min(&mut self, value: K) {
+    pub fn push_min(&mut self, value: K) {
         let node = Node::<K, V> {
             key: value,
             value: V::default(),
@@ -205,7 +202,7 @@ impl<
         self.size += 1;
     }
 
-    pub fn _pop_min(&mut self) {
+    pub fn pop_min(&mut self) {
         let lastidx = (self.size - 1) as usize;
         Self::swap_node(&mut self.nodes, 0, lastidx);
         self.nodes[(self.size - 1) as usize] = Node::default();
@@ -214,9 +211,6 @@ impl<
     }
 
     fn _heapify_up_min(&mut self, index: usize) {
-        if self.size == 1 {
-            return;
-        }
         if index == 0 {
             return;
         }
@@ -236,16 +230,16 @@ impl<
         }
     }
 
-    fn _heapify_down_min(&mut self, rootidx: usize) {
-        let mut parent = rootidx;
-        let mut left_childidx = (2 * rootidx) + 1;
-        let mut right_childidx = (2 * rootidx) + 2;
+    fn _heapify_down_min(&mut self, index: usize) {
+        let mut parent = index;
+        let mut left_childidx = (2 * parent) + 1;
+        let mut right_childidx = (2 * parent) + 2;
 
         while left_childidx <= self.size as usize {
             if right_childidx <= self.size as usize {
                 if self.nodes[left_childidx].key < self.nodes[right_childidx].key {
-                    if self.nodes[left_childidx].key < self.nodes[rootidx].key {
-                        Self::swap_node(&mut self.nodes, rootidx, left_childidx);
+                    if self.nodes[left_childidx].key < self.nodes[parent].key {
+                        Self::swap_node(&mut self.nodes, parent, left_childidx);
                         let temp = parent;
                         parent = left_childidx;
                         left_childidx = temp;
@@ -253,8 +247,8 @@ impl<
                         return;
                     }
                 } else if self.nodes[right_childidx].key < self.nodes[left_childidx].key {
-                    if self.nodes[right_childidx].key < self.nodes[rootidx].key {
-                        Self::swap_node(&mut self.nodes, rootidx, right_childidx);
+                    if self.nodes[right_childidx].key < self.nodes[parent].key {
+                        Self::swap_node(&mut self.nodes, parent, right_childidx);
                         let temp = parent;
                         parent = right_childidx;
                         right_childidx = temp;
@@ -263,8 +257,8 @@ impl<
                     }
                 }
             } else if left_childidx <= self.size as usize {
-                if self.nodes[left_childidx].key < self.nodes[rootidx].key {
-                    Self::swap_node(&mut self.nodes, rootidx, left_childidx);
+                if self.nodes[left_childidx].key < self.nodes[parent].key {
+                    Self::swap_node(&mut self.nodes, parent, left_childidx);
                     let temp = parent;
                     parent = left_childidx;
                     left_childidx = temp;
@@ -278,7 +272,7 @@ impl<
     }
 
     pub fn peek_mut(&mut self) -> Option<PeekMut<'_, K, V, MAX_SIZE>> {
-        if self._is_empty() {
+        if self.is_empty() {
             None
         } else {
             Some(PeekMut {
@@ -288,9 +282,9 @@ impl<
         }
     }
 
-    pub fn _iter(&self) -> BinaryHeapIterator<K, V, MAX_SIZE> {
-        BinaryHeapIterator {
-            heap: *self,
+    pub fn iter(&self) -> BinaryHeapIterator<'_, K, V, MAX_SIZE> {
+        BinaryHeapIterator::<K, V, MAX_SIZE> {
+            heap: self,
             current: 0,
         }
     }
@@ -338,7 +332,7 @@ impl<
 {
     type Target = K;
     fn deref(&self) -> &K {
-        debug_assert!(!self.heap._is_empty());
+        debug_assert!(!self.heap.is_empty());
         // SAFE: PeekMut is only instantiated for non-empty heaps
         unsafe { &self.heap.nodes.get_unchecked(0).key }
     }
@@ -351,7 +345,7 @@ impl<
     > DerefMut for PeekMut<'_, K, V, MAX_SIZE>
 {
     fn deref_mut(&mut self) -> &mut K {
-        debug_assert!(!self.heap._is_empty());
+        debug_assert!(!self.heap.is_empty());
         self.sift = true;
         // SAFE: PeekMut is only instantiated for non-empty heaps
         unsafe { &mut self.heap.nodes.get_unchecked_mut(0).key }
@@ -360,30 +354,33 @@ impl<
 
 #[derive(Debug)]
 pub struct BinaryHeapIterator<
+    'a,
     K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
     V: Copy + Clone + Default + Pod + Zeroable,
     const MAX_SIZE: usize,
 > {
-    pub heap: Heap<K, V, MAX_SIZE>,
+    pub heap: &'a Heap<K, V, MAX_SIZE>,
     pub current: u64,
 }
+
 impl<
+        'a,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Copy + Clone + Default + Pod + Zeroable,
         const MAX_SIZE: usize,
-    > Iterator for BinaryHeapIterator<K, V, MAX_SIZE>
+    > Iterator for BinaryHeapIterator<'a, K, V, MAX_SIZE>
 {
-    type Item = (K, V);
+    type Item = (&'a K, &'a V);
+
     fn next(&mut self) -> Option<Self::Item> {
-        let mut next: Option<(K, V)> = Some((K::default(), V::default()));
         if self.current < self.heap.size {
-            next = Some((
-                self.heap.nodes[self.current as usize].key,
-                self.heap.nodes[self.current as usize].value,
-            ));
-            
+            self.current += 1;
+            Some(
+                (&self.heap.nodes[(self.current - 1) as usize].key, 
+                &self.heap.nodes[(self.current - 1) as usize].value)
+            )
+        } else {
+            None
         }
-        self.current += 1;
-        next
     }
 }

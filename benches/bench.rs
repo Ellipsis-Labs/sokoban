@@ -121,7 +121,7 @@ mod bench_tests {
 
         b.iter(|| {
             for v in 0..1000 {
-                sokoban_heap._push(rng.gen::<u128>());
+                sokoban_heap.push(rng.gen::<u128>());
             }
         })
     }
@@ -258,7 +258,7 @@ mod bench_tests {
 
         b.iter(|| {
             for v in 0..1000 {
-                sokoban_heap._push(rng.gen::<u128>());
+                sokoban_heap.push(rng.gen::<u128>());
             }
         })
     }
@@ -387,10 +387,10 @@ mod bench_tests {
 
         b.iter(|| {
             for v in 0..1000 {
-                sokoban_heap._push(rng.gen::<u128>());
+                sokoban_heap.push(rng.gen::<u128>());
             }
             for k in slice.iter() {
-                sokoban_heap._pop();
+                sokoban_heap.pop();
             }
         })
     }
