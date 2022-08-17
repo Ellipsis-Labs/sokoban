@@ -206,7 +206,13 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iter
                 let ptr = self.ptr;
                 self.ptr = self.deque.get_next(ptr);
                 Some((ptr as usize, unsafe {
-                    (*self.deque.allocator.nodes.as_mut_ptr().add(ptr as usize)).get_value_mut()
+                    (*self
+                        .deque
+                        .allocator
+                        .nodes
+                        .as_mut_ptr()
+                        .add((ptr - 1) as usize))
+                    .get_value_mut()
                 }))
             }
         }

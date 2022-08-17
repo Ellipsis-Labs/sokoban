@@ -369,7 +369,7 @@ impl<
                 return Some(reference_node);
             };
             if target == SENTINEL {
-                if self.size() >= MAX_SIZE - 1 {
+                if self.size() >= MAX_SIZE {
                     return None;
                 }
                 let node_index = self.allocator.add_node(new_node);
@@ -670,8 +670,13 @@ impl<
                 self.node = self.tree.get_right(ptr);
                 // TODO: How does one remove this unsafe?
                 unsafe {
-                    let node =
-                        (*self.tree.allocator.nodes.as_mut_ptr().add(ptr as usize)).get_value_mut();
+                    let node = (*self
+                        .tree
+                        .allocator
+                        .nodes
+                        .as_mut_ptr()
+                        .add((ptr - 1) as usize))
+                    .get_value_mut();
                     return Some((&node.key, &mut node.value));
                 }
             }

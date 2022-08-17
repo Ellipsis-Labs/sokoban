@@ -2,7 +2,8 @@ use bytemuck::{Pod, Zeroable};
 use std::ops::{Index, IndexMut};
 
 use crate::node_allocator::{
-    FromSlice, NodeAllocator, NodeAllocatorMap, TreeField as Field, ZeroCopy, SENTINEL, OrderedNodeAllocatorMap,
+    FromSlice, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap, TreeField as Field,
+    ZeroCopy, SENTINEL,
 };
 
 #[repr(C)]
@@ -103,7 +104,6 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         Box::new(self._iter_mut())
     }
 }
-
 
 impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
     OrderedNodeAllocatorMap<u128, V> for Critbit<V, NUM_NODES, MAX_SIZE>
@@ -389,7 +389,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
             return Some(self.root as u32);
         }
         // Return None if the tree is filled up
-        if self.size() >= MAX_SIZE - 1 {
+        if self.size() >= MAX_SIZE {
             return None;
         }
         let mut node_index = self.root as u32;
@@ -571,10 +571,15 @@ impl<
                     if !self.tree.is_inner_node(n) {
                         let i = self.tree.get_leaf_index(n);
                         unsafe {
-                            let key = &(*self.tree.node_allocator.nodes.as_ptr().add(n as usize))
-                                .get_value()
-                                .key;
-                            let leaf = (*self.tree.leaves.nodes.as_mut_ptr().add(i as usize))
+                            let key = &(*self
+                                .tree
+                                .node_allocator
+                                .nodes
+                                .as_ptr()
+                                .add((n - 1) as usize))
+                            .get_value()
+                            .key;
+                            let leaf = (*self.tree.leaves.nodes.as_mut_ptr().add((i - 1) as usize))
                                 .get_value_mut();
                             return Some((key, leaf));
                         }
