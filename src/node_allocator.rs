@@ -35,9 +35,11 @@ pub trait NodeAllocatorMap<K, V> {
     fn insert(&mut self, key: K, value: V) -> Option<u32>;
     fn remove(&mut self, key: &K) -> Option<V>;
     fn contains(&self, key: &K) -> bool;
+    fn get(&self, key: &K) -> Option<&V>;
+    fn get_mut(&mut self, key: &K) -> Option<&mut V>;
     fn size(&self) -> usize;
-    fn iter(&self) -> Box<dyn Iterator<Item = (&K, &V)> + '_>;
-    fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (&K, &mut V)> + '_>;
+    fn iter(&self) -> Box<dyn DoubleEndedIterator<Item = (&K, &V)> + '_>;
+    fn iter_mut(&mut self) -> Box<dyn DoubleEndedIterator<Item = (&K, &mut V)> + '_>;
 }
 
 /// This trait allows allows for templated functions on sorted map data structures that use the NodeAllocator

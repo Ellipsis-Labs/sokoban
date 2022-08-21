@@ -114,15 +114,68 @@ impl<
         self.get(key).is_some()
     }
 
+    fn get(&self, key: &K) -> Option<&V> {
+        let mut hasher = DefaultHasher::new();
+        key.hash(&mut hasher);
+        let bucket_index = hasher.finish() as usize % NUM_BUCKETS;
+        let mut curr_node = self.buckets[bucket_index];
+        while curr_node != SENTINEL {
+            let node = self.get_node(curr_node);
+            if node.key == *key {
+                return Some(&node.value);
+            } else {
+                curr_node = self.get_next(curr_node);
+            }
+        }
+        None
+    }
+
+    fn get_mut(&mut self, key: &K) -> Option<&mut V> {
+        let mut hasher = DefaultHasher::new();
+        key.hash(&mut hasher);
+        let bucket_index = hasher.finish() as usize % NUM_BUCKETS;
+        let head = self.buckets[bucket_index];
+        let mut curr_node = head;
+        while curr_node != SENTINEL {
+            let node = self.get_node(curr_node);
+            if node.key == *key {
+                // If get_mut is called, we move the matched node to the front of the queue
+                let prev = self.get_prev(curr_node);
+                let next = self.get_next(curr_node);
+                if curr_node != head {
+                    self.allocator
+                        .clear_register(curr_node, NodeField::Left as u32);
+                    self.allocator.connect(
+                        prev,
+                        next,
+                        NodeField::Right as u32,
+                        NodeField::Left as u32,
+                    );
+                    self.allocator.connect(
+                        curr_node,
+                        head,
+                        NodeField::Right as u32,
+                        NodeField::Left as u32,
+                    );
+                }
+                self.buckets[bucket_index] = curr_node;
+                return Some(&mut self.get_node_mut(curr_node).value);
+            } else {
+                curr_node = self.get_next(curr_node);
+            }
+        }
+        None
+    }
+
     fn size(&self) -> usize {
         self.allocator.size as usize
     }
 
-    fn iter(&self) -> Box<dyn Iterator<Item = (&K, &V)> + '_> {
+    fn iter(&self) -> Box<dyn DoubleEndedIterator<Item = (&K, &V)> + '_> {
         Box::new(self._iter())
     }
 
-    fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (&K, &mut V)> + '_> {
+    fn iter_mut(&mut self) -> Box<dyn DoubleEndedIterator<Item = (&K, &mut V)> + '_> {
         Box::new(self._iter_mut())
     }
 }
@@ -271,59 +324,6 @@ impl<
         SENTINEL
     }
 
-    pub fn get(&self, key: &K) -> Option<&V> {
-        let mut hasher = DefaultHasher::new();
-        key.hash(&mut hasher);
-        let bucket_index = hasher.finish() as usize % NUM_BUCKETS;
-        let mut curr_node = self.buckets[bucket_index];
-        while curr_node != SENTINEL {
-            let node = self.get_node(curr_node);
-            if node.key == *key {
-                return Some(&node.value);
-            } else {
-                curr_node = self.get_next(curr_node);
-            }
-        }
-        None
-    }
-
-    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        let mut hasher = DefaultHasher::new();
-        key.hash(&mut hasher);
-        let bucket_index = hasher.finish() as usize % NUM_BUCKETS;
-        let head = self.buckets[bucket_index];
-        let mut curr_node = head;
-        while curr_node != SENTINEL {
-            let node = self.get_node(curr_node);
-            if node.key == *key {
-                // If get_mut is called, we move the matched node to the front of the queue
-                let prev = self.get_prev(curr_node);
-                let next = self.get_next(curr_node);
-                if curr_node != head {
-                    self.allocator
-                        .clear_register(curr_node, NodeField::Left as u32);
-                    self.allocator.connect(
-                        prev,
-                        next,
-                        NodeField::Right as u32,
-                        NodeField::Left as u32,
-                    );
-                    self.allocator.connect(
-                        curr_node,
-                        head,
-                        NodeField::Right as u32,
-                        NodeField::Left as u32,
-                    );
-                }
-                self.buckets[bucket_index] = curr_node;
-                return Some(&mut self.get_node_mut(curr_node).value);
-            } else {
-                curr_node = self.get_next(curr_node);
-            }
-        }
-        None
-    }
-
     fn _iter(&self) -> HashTableIterator<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
         HashTableIterator::<K, V, NUM_BUCKETS, MAX_SIZE> {
             ht: self,
@@ -339,6 +339,38 @@ impl<
             bucket: 0,
             node,
         }
+    }
+}
+
+impl<
+        'a,
+        K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const NUM_BUCKETS: usize,
+        const MAX_SIZE: usize,
+    > IntoIterator for &'a HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
+{
+    type Item = (&'a K, &'a V);
+    type IntoIter = HashTableIterator<'a, K, V, NUM_BUCKETS, MAX_SIZE>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self._iter()
+    }
+}
+
+impl<
+        'a,
+        K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const NUM_BUCKETS: usize,
+        const MAX_SIZE: usize,
+    > IntoIterator for &'a mut HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
+{
+    type Item = (&'a K, &'a mut V);
+    type IntoIter = HashTableIteratorMut<'a, K, V, NUM_BUCKETS, MAX_SIZE>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self._iter_mut()
     }
 }
 
@@ -380,6 +412,19 @@ impl<
         } else {
             None
         }
+    }
+}
+
+impl<
+        'a,
+        K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const NUM_BUCKETS: usize,
+        const MAX_SIZE: usize,
+    > DoubleEndedIterator for HashTableIterator<'a, K, V, NUM_BUCKETS, MAX_SIZE>
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        None
     }
 }
 
@@ -426,6 +471,19 @@ impl<
         } else {
             None
         }
+    }
+}
+
+impl<
+        'a,
+        K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const NUM_BUCKETS: usize,
+        const MAX_SIZE: usize,
+    > DoubleEndedIterator for HashTableIteratorMut<'a, K, V, NUM_BUCKETS, MAX_SIZE>
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        None
     }
 }
 
