@@ -89,18 +89,58 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     }
 
     fn contains(&self, key: &u128) -> bool {
-        self.get(*key).is_some()
+        self.get(key).is_some()
+    }
+
+    fn get(&self, key: &u128) -> Option<&V> {
+        let mut node_index = self.root as u32;
+        loop {
+            let node = self.get_node(node_index);
+            if !self.is_inner_node(node_index) {
+                if node.key == *key {
+                    let leaf_index = self.get_leaf_index(node_index);
+                    return Some(self.get_leaf(leaf_index));
+                } else {
+                    return None;
+                }
+            }
+            let shared_prefix_len = (node.key ^ key).leading_zeros() as u64;
+            if shared_prefix_len >= node.prefix_len {
+                node_index = self.get_child(node.prefix_len, node_index, *key).0;
+                continue;
+            }
+        }
+    }
+
+    fn get_mut(&mut self, key: &u128) -> Option<&mut V> {
+        let mut node_index = self.root as u32;
+        loop {
+            let node = self.get_node(node_index);
+            if !self.is_inner_node(node_index) {
+                if node.key == *key {
+                    let leaf_index = self.get_leaf_index(node_index);
+                    return Some(self.get_leaf_mut(leaf_index));
+                } else {
+                    return None;
+                }
+            }
+            let shared_prefix_len = (node.key ^ key).leading_zeros() as u64;
+            if shared_prefix_len >= node.prefix_len {
+                node_index = self.get_child(node.prefix_len, node_index, *key).0;
+                continue;
+            }
+        }
     }
 
     fn size(&self) -> usize {
         self.leaves.size as usize
     }
 
-    fn iter(&self) -> Box<dyn Iterator<Item = (&u128, &V)> + '_> {
+    fn iter(&self) -> Box<dyn DoubleEndedIterator<Item = (&u128, &V)> + '_> {
         Box::new(self._iter())
     }
 
-    fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (&u128, &mut V)> + '_> {
+    fn iter_mut(&mut self) -> Box<dyn DoubleEndedIterator<Item = (&u128, &mut V)> + '_> {
         Box::new(self._iter_mut())
     }
 }
@@ -342,46 +382,6 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         }
     }
 
-    pub fn get(&self, key: u128) -> Option<&V> {
-        let mut node_index = self.root as u32;
-        loop {
-            let node = self.get_node(node_index);
-            if !self.is_inner_node(node_index) {
-                if node.key == key {
-                    let leaf_index = self.get_leaf_index(node_index);
-                    return Some(self.get_leaf(leaf_index));
-                } else {
-                    return None;
-                }
-            }
-            let shared_prefix_len = (node.key ^ key).leading_zeros() as u64;
-            if shared_prefix_len >= node.prefix_len {
-                node_index = self.get_child(node.prefix_len, node_index, key).0;
-                continue;
-            }
-        }
-    }
-
-    pub fn get_mut(&mut self, key: u128) -> Option<&mut V> {
-        let mut node_index = self.root as u32;
-        loop {
-            let node = self.get_node(node_index);
-            if !self.is_inner_node(node_index) {
-                if node.key == key {
-                    let leaf_index = self.get_leaf_index(node_index);
-                    return Some(self.get_leaf_mut(leaf_index));
-                } else {
-                    return None;
-                }
-            }
-            let shared_prefix_len = (node.key ^ key).leading_zeros() as u64;
-            if shared_prefix_len >= node.prefix_len {
-                node_index = self.get_child(node.prefix_len, node_index, key).0;
-                continue;
-            }
-        }
-    }
-
     fn _insert(&mut self, key: u128, value: V) -> Option<u32> {
         if self.root as u32 == SENTINEL {
             let (node_index, _leaf_index) = self.add_leaf(key, value);
@@ -491,6 +491,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         CritbitIterator::<V, NUM_NODES, MAX_SIZE> {
             tree: self,
             stack: vec![self.root as u32],
+            rev_stack: vec![self.root as u32],
         }
     }
 
@@ -499,7 +500,38 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         CritbitIteratorMut::<V, NUM_NODES, MAX_SIZE> {
             tree: self,
             stack: vec![node],
+            rev_stack: vec![node],
         }
+    }
+}
+
+impl<
+        'a,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_NODES: usize,
+        const MAX_SIZE: usize,
+    > IntoIterator for &'a Critbit<V, MAX_NODES, MAX_SIZE>
+{
+    type Item = (&'a u128, &'a V);
+    type IntoIter = CritbitIterator<'a, V, MAX_NODES, MAX_SIZE>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self._iter()
+    }
+}
+
+impl<
+        'a,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_NODES: usize,
+        const MAX_SIZE: usize,
+    > IntoIterator for &'a mut Critbit<V, MAX_NODES, MAX_SIZE>
+{
+    type Item = (&'a u128, &'a mut V);
+    type IntoIter = CritbitIteratorMut<'a, V, MAX_NODES, MAX_SIZE>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self._iter_mut()
     }
 }
 
@@ -511,6 +543,7 @@ pub struct CritbitIterator<
 > {
     pub tree: &'a Critbit<V, MAX_NODES, MAX_SIZE>,
     pub stack: Vec<u32>,
+    pub rev_stack: Vec<u32>,
 }
 
 impl<
@@ -544,6 +577,35 @@ impl<
     }
 }
 
+impl<
+        'a,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_NODES: usize,
+        const MAX_SIZE: usize,
+    > DoubleEndedIterator for CritbitIterator<'a, V, MAX_NODES, MAX_SIZE>
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        while !self.rev_stack.is_empty() {
+            let node = self.rev_stack.pop();
+            match node {
+                Some(n) => {
+                    if !self.tree.is_inner_node(n) {
+                        let i = self.tree.get_leaf_index(n);
+                        let v = self.tree.get_leaf(i);
+                        let k = self.tree.get_key(n);
+                        return Some((k, v));
+                    } else {
+                        self.rev_stack.push(self.tree.get_left(n));
+                        self.rev_stack.push(self.tree.get_right(n));
+                    }
+                }
+                _ => return None,
+            }
+        }
+        None
+    }
+}
+
 pub struct CritbitIteratorMut<
     'a,
     V: Default + Copy + Clone + Pod + Zeroable,
@@ -552,6 +614,7 @@ pub struct CritbitIteratorMut<
 > {
     pub tree: &'a mut Critbit<V, MAX_NODES, MAX_SIZE>,
     pub stack: Vec<u32>,
+    pub rev_stack: Vec<u32>,
 }
 
 impl<
@@ -595,13 +658,52 @@ impl<
     }
 }
 
+impl<
+        'a,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_NODES: usize,
+        const MAX_SIZE: usize,
+    > DoubleEndedIterator for CritbitIteratorMut<'a, V, MAX_NODES, MAX_SIZE>
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        while !self.rev_stack.is_empty() {
+            let node = self.rev_stack.pop();
+            match node {
+                Some(n) => {
+                    if !self.tree.is_inner_node(n) {
+                        let i = self.tree.get_leaf_index(n);
+                        unsafe {
+                            let key = &(*self
+                                .tree
+                                .node_allocator
+                                .nodes
+                                .as_ptr()
+                                .add((n - 1) as usize))
+                            .get_value()
+                            .key;
+                            let leaf = (*self.tree.leaves.nodes.as_mut_ptr().add((i - 1) as usize))
+                                .get_value_mut();
+                            return Some((key, leaf));
+                        }
+                    } else {
+                        self.rev_stack.push(self.tree.get_left(n));
+                        self.rev_stack.push(self.tree.get_right(n));
+                    }
+                }
+                _ => return None,
+            }
+        }
+        None
+    }
+}
+
 impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
     Index<u128> for Critbit<V, NUM_NODES, MAX_SIZE>
 {
     type Output = V;
 
     fn index(&self, index: u128) -> &Self::Output {
-        self.get(index).unwrap()
+        self.get(&index).unwrap()
     }
 }
 
@@ -609,6 +711,6 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     IndexMut<u128> for Critbit<V, NUM_NODES, MAX_SIZE>
 {
     fn index_mut(&mut self, index: u128) -> &mut Self::Output {
-        self.get_mut(index).unwrap()
+        self.get_mut(&index).unwrap()
     }
 }

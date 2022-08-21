@@ -35,7 +35,7 @@ impl Widget {
 
 fn simulate<T>(expect_sorted: bool)
 where
-    T: FromSlice + NodeAllocatorMap<u128, Widget>,
+    T: Copy + FromSlice + NodeAllocatorMap<u128, Widget>,
 {
     let mut buf = vec![0u8; std::mem::size_of::<T>()];
     let tree = T::new_from_slice(buf.as_mut_slice());
@@ -124,10 +124,12 @@ where
             }
         }
     }
-    println!("{} Size: {}", std::any::type_name::<T>(), tree.size(),);
-
     if expect_sorted {
         for ((k1, v1), (k2, v2)) in map.iter().zip(tree.iter()) {
+            assert!(*k1 == *k2);
+            assert!(*v1 == *v2);
+        }
+        for ((k1, v1), (k2, v2)) in map.iter().rev().zip(tree.iter().rev()) {
             assert!(*k1 == *k2);
             assert!(*v1 == *v2);
         }
@@ -150,12 +152,17 @@ where
             assert!(*k1 == *k2);
             assert!(*v1 == *v2);
         }
+        for ((k1, v1), (k2, v2)) in new_map.iter().rev().zip(tree.iter().rev()) {
+            assert!(*k1 == *k2);
+            assert!(*v1 == *v2);
+        }
     } else {
         for ((k1, v1), (k2, v2)) in new_map.iter().zip(tree.iter().sorted()) {
             assert!(*k1 == *k2);
             assert!(*v1 == *v2);
         }
     }
+    println!("{} Size: {}", std::any::type_name::<T>(), tree.size(),);
 }
 
 #[tokio::test(flavor = "multi_thread")]
