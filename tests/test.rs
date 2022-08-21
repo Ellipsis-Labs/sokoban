@@ -188,5 +188,5 @@ async fn test_simulate_avl_tree() {
 async fn test_simulate_critbit() {
     const NUM_NODES: usize = MAX_SIZE << 1;
     type CritbitTree = Critbit<Widget, NUM_NODES, MAX_SIZE>;
-    simulate::<CritbitTree>(false);
+    simulate::<CritbitTree>(true);
 }
