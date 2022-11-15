@@ -298,7 +298,7 @@ mod bench_tests {
     }
 
     #[bench]
-    fn bench_sokoban_avl_tree_remove_u128(b: &mut Bencher) {
+    fn bench_sokoban_avl_tree_remove_1000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; std::mem::size_of::<AVLTreeMap>()];
         let m = AVLTreeMap::new_from_slice(buf.as_mut_slice());
