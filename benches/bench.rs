@@ -313,4 +313,93 @@ mod bench_tests {
             }
         })
     }
+
+
+    #[bench]
+    fn bench_std_btree_map_lookup_20000_u128(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut m = BTreeMap::new();
+        for v in 0..20000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
+        b.iter(|| {
+            for v in 0..20000 {
+                m.get(&v);
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_std_hash_map_lookup_20000_u128(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut m = HashMap::new();
+        for v in 0..20000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
+        b.iter(|| {
+            for v in 0..20000 {
+                m.get(&v);
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_sokoban_red_black_tree_lookup_20000_u128(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut buf = vec![0u8; std::mem::size_of::<RBTree>()];
+        let m = RBTree::new_from_slice(buf.as_mut_slice());
+        for v in 0..20000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
+        b.iter(|| {
+            for v in 0..20000 {
+                m.get(&v);
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_sokoban_hash_map_lookup_20000_u128(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut buf = vec![0u8; std::mem::size_of::<SHashMap>()];
+        let m = SHashMap::new_from_slice(buf.as_mut_slice());
+        for v in 0..20000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
+        b.iter(|| {
+            for v in 0..20000 {
+                m.get(&v);
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_sokoban_critbit_lookup_20000_u128(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut buf = vec![0u8; std::mem::size_of::<CritbitTree>()];
+        let m = CritbitTree::new_from_slice(buf.as_mut_slice());
+        for v in 0..20000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
+        b.iter(|| {
+            for v in 0..20000 {
+                m.get(&v);
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_sokoban_avl_tree_lookup_20000_u128(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut buf = vec![0u8; std::mem::size_of::<AVLTreeMap>()];
+        let m = AVLTreeMap::new_from_slice(buf.as_mut_slice());
+        for v in 0..20000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
+        b.iter(|| {
+            for v in 0..20000 {
+                m.get(&v);
+            }
+        })
+    }
 }
