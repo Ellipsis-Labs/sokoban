@@ -220,10 +220,10 @@ mod bench_tests {
         let mut m = BTreeMap::new();
         let mut slice: Vec<u128> = (0..1000).collect();
         slice.shuffle(&mut rng);
+        for v in 0..1000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
         b.iter(|| {
-            for v in 0..1000 {
-                m.insert(v as u128, rng.gen::<u128>());
-            }
             for k in slice.iter() {
                 m.remove(k);
             }
@@ -236,10 +236,10 @@ mod bench_tests {
         let mut m = HashMap::new();
         let mut slice: Vec<u128> = (0..1000).collect();
         slice.shuffle(&mut rng);
+        for v in 0..1000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
         b.iter(|| {
-            for v in 0..1000 {
-                m.insert(v as u128, rng.gen::<u128>());
-            }
             for k in slice.iter() {
                 m.remove(k);
             }
@@ -253,10 +253,10 @@ mod bench_tests {
         let m = RBTree::new_from_slice(buf.as_mut_slice());
         let mut slice: Vec<u128> = (0..1000).collect();
         slice.shuffle(&mut rng);
+        for v in 0..1000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
         b.iter(|| {
-            for v in 0..1000 {
-                m.insert(v as u128, rng.gen::<u128>());
-            }
             for k in slice.iter() {
                 m.remove(k);
             }
@@ -270,10 +270,10 @@ mod bench_tests {
         let m = SHashMap::new_from_slice(buf.as_mut_slice());
         let mut slice: Vec<u128> = (0..1000).collect();
         slice.shuffle(&mut rng);
+        for v in 0..1000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
         b.iter(|| {
-            for v in 0..1000 {
-                m.insert(v as u128, rng.gen::<u128>());
-            }
             for k in slice.iter() {
                 m.remove(k);
             }
@@ -287,10 +287,10 @@ mod bench_tests {
         let m = CritbitTree::new_from_slice(buf.as_mut_slice());
         let mut slice: Vec<u128> = (0..1000).collect();
         slice.shuffle(&mut rng);
+        for v in 0..1000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
         b.iter(|| {
-            for v in 0..1000 {
-                m.insert(v as u128, rng.gen::<u128>());
-            }
             for k in slice.iter() {
                 m.remove(k);
             }
@@ -304,10 +304,10 @@ mod bench_tests {
         let m = AVLTreeMap::new_from_slice(buf.as_mut_slice());
         let mut slice: Vec<u128> = (0..1000).collect();
         slice.shuffle(&mut rng);
+        for v in 0..1000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
         b.iter(|| {
-            for v in 0..1000 {
-                m.insert(v as u128, rng.gen::<u128>());
-            }
             for k in slice.iter() {
                 m.remove(k);
             }
