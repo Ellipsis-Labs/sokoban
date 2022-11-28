@@ -1,7 +1,12 @@
 use bytemuck::{Pod, Zeroable};
+use colored::Colorize;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use std::ops::{Index, IndexMut};
+use std::{
+    collections::BTreeMap,
+    fmt::{Debug, Display},
+    ops::{Index, IndexMut},
+};
 
 use crate::node_allocator::{
     FromSlice, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap, TreeField as Field,
@@ -28,7 +33,7 @@ fn opposite(dir: u32) -> u32 {
 #[repr(C)]
 #[derive(Default, Copy, Clone)]
 pub struct RBNode<
-    K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+    K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
 > {
     pub key: K,
@@ -36,20 +41,20 @@ pub struct RBNode<
 }
 
 unsafe impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
     > Zeroable for RBNode<K, V>
 {
 }
 unsafe impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
     > Pod for RBNode<K, V>
 {
 }
 
 impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
     > RBNode<K, V>
 {
@@ -60,7 +65,7 @@ impl<
 
 #[derive(Copy, Clone)]
 pub struct RedBlackTree<
-    K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+    K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
     const MAX_SIZE: usize,
 > {
@@ -70,14 +75,14 @@ pub struct RedBlackTree<
 }
 
 unsafe impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > Zeroable for RedBlackTree<K, V, MAX_SIZE>
 {
 }
 unsafe impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > Pod for RedBlackTree<K, V, MAX_SIZE>
@@ -85,7 +90,7 @@ unsafe impl<
 }
 
 impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > ZeroCopy for RedBlackTree<K, V, MAX_SIZE>
@@ -93,7 +98,7 @@ impl<
 }
 
 impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > Default for RedBlackTree<K, V, MAX_SIZE>
@@ -109,7 +114,7 @@ impl<
 }
 
 impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > FromSlice for RedBlackTree<K, V, MAX_SIZE>
@@ -123,7 +128,7 @@ impl<
 }
 
 impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > NodeAllocatorMap<K, V> for RedBlackTree<K, V, MAX_SIZE>
@@ -195,7 +200,7 @@ impl<
 }
 
 impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > OrderedNodeAllocatorMap<K, V> for RedBlackTree<K, V, MAX_SIZE>
@@ -230,26 +235,53 @@ impl<
 }
 
 impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > RedBlackTree<K, V, MAX_SIZE>
 {
-    pub fn print_node(&self, node: u32)
+    pub fn pretty_print(&self)
     where
-        K: std::fmt::Debug,
-        V: std::fmt::Debug,
+        K: Debug + Display,
     {
-        println!("Node Index: {}", node);
-        println!("Left: {}", self.get_left(node));
-        println!("Right: {}", self.get_right(node));
-        println!("Parent: {}", self.get_parent(node));
-        println!(
-            "Color: {}",
-            if self.is_black(node) { "Black" } else { "Red" }
-        );
-        println!("Key: {:?}", self.get_node(node).key);
-        println!()
+        let mut s = String::new();
+        let mut stack = vec![(self.root as u32, "".to_string(), "".to_string())];
+        let key_to_index = self
+            .iter()
+            .enumerate()
+            .map(|(i, (k, _))| (k, i))
+            .collect::<BTreeMap<_, _>>();
+
+        while !stack.is_empty() {
+            let (node, mut padding, pointer) = stack.pop().unwrap();
+            if node == SENTINEL {
+                continue;
+            }
+            let key = self.get_node(node).key;
+            s.push_str(&padding);
+            s.push_str(&pointer);
+            if self.is_red(node) {
+                s.push_str(&format!(
+                    "\u{001b}[31m{:?} ({})\u{001b}[0m",
+                    key, key_to_index[&key]
+                ));
+            } else {
+                s.push_str(&format!("{:?} ({})", key, key_to_index[&key]));
+            }
+            s.push_str("\n");
+            padding.push_str("│  ");
+
+            let right_pointer = "└──".to_string();
+            let left_pointer = if self.get_right(node) != SENTINEL {
+                "├──".to_string()
+            } else {
+                "└──".to_string()
+            };
+
+            stack.push((self.get_right(node), padding.clone(), right_pointer));
+            stack.push((self.get_left(node), padding.clone(), left_pointer));
+        }
+        println!("{}", s);
     }
 
     fn assert_proper_alignment() {
@@ -257,6 +289,42 @@ impl<
         assert!(std::mem::size_of::<V>() % std::mem::align_of::<K>() == 0);
         assert!(std::mem::size_of::<RBNode<K, V>>() % std::mem::align_of::<RBNode<K, V>>() == 0);
         assert!(std::mem::size_of::<RBNode<K, V>>() % 8_usize == 0);
+    }
+
+    pub fn is_valid_red_black_tree(&self) -> bool {
+        // The root is black
+        if self.is_red(self.root as u32) {
+            return false;
+        }
+
+        let mut stack = vec![(self.root as u32, 0)];
+        let mut black_count = vec![];
+
+        while !stack.is_empty() {
+            let (node_index, mut count) = stack.pop().unwrap();
+            count += self.is_black(node_index) as u32;
+            if self.is_leaf(node_index) {
+                black_count.push(count);
+                continue;
+            }
+            for child in [self.get_left(node_index), self.get_right(node_index)] {
+                if child == SENTINEL {
+                    continue;
+                }
+                // Red nodes cannot have red children
+                if self.is_red(node_index) && self.is_red(child) {
+                    return false;
+                }
+                stack.push((child, count));
+            }
+        }
+        // All paths from root to leaf must have the same number of black nodes
+        let branch_len_equal = black_count.iter().all(|&x| x == black_count[0]);
+        if !branch_len_equal {
+            println!("Branch lengths not equal: {:?}", black_count);
+            return false;
+        }
+        true
     }
 
     pub fn new() -> Self {
@@ -290,6 +358,11 @@ impl<
     }
 
     #[inline(always)]
+    fn color_node(&mut self, node: u32, color: u32) {
+        self.allocator.set_register(node, color, COLOR);
+    }
+
+    #[inline(always)]
     fn is_red(&self, node: u32) -> bool {
         self.allocator.get_register(node, COLOR) == Color::Red as u32
     }
@@ -307,6 +380,14 @@ impl<
     #[inline(always)]
     pub fn is_leaf(&self, node: u32) -> bool {
         self.get_left(node) == SENTINEL && self.get_right(node) == SENTINEL
+    }
+
+    pub fn get_dir(&self, node: u32, dir: u32) -> u32 {
+        if dir == Field::Left as u32 {
+            self.get_left(node)
+        } else {
+            self.get_right(node)
+        }
     }
 
     #[inline(always)]
@@ -327,6 +408,16 @@ impl<
     #[inline(always)]
     pub fn get_parent(&self, node: u32) -> u32 {
         self.allocator.get_register(node, Field::Parent as u32)
+    }
+
+    fn remove_node(&mut self, node: u32) {
+        // Clear all registers
+        self.allocator.clear_register(node, Field::Parent as u32);
+        self.allocator.clear_register(node, COLOR);
+        self.allocator.clear_register(node, Field::Left as u32);
+        self.allocator.clear_register(node, Field::Right as u32);
+        // Add free slot to the free list
+        self.allocator.remove_node(node);
     }
 
     #[inline(always)]
@@ -350,9 +441,11 @@ impl<
 
     fn rotate_dir(&mut self, parent_index: u32, dir: u32) -> Option<u32> {
         let grandparent_index = self.get_parent(parent_index);
-        match FromPrimitive::from_u32(dir) {
-            Some(Field::Left) | Some(Field::Right) => {}
-            _ => return None,
+        if !matches!(
+            FromPrimitive::from_u32(dir),
+            Some(Field::Left) | Some(Field::Right),
+        ) {
+            return None;
         }
         let sibling_index = self.get_child(parent_index, opposite(dir));
         if sibling_index == SENTINEL {
@@ -362,13 +455,11 @@ impl<
         self.connect(sibling_index, parent_index, dir);
         self.connect(parent_index, child_index, opposite(dir));
         if grandparent_index != SENTINEL {
-            if self.get_left(grandparent_index) == parent_index {
-                self.connect(grandparent_index, sibling_index, Field::Left as u32);
-            } else if self.get_right(grandparent_index) == parent_index {
-                self.connect(grandparent_index, sibling_index, Field::Right as u32);
-            } else {
-                return None;
-            }
+            self.connect(
+                grandparent_index,
+                sibling_index,
+                self.child_dir(grandparent_index, parent_index),
+            );
         } else {
             self.allocator
                 .clear_register(sibling_index, Field::Parent as u32);
@@ -444,118 +535,116 @@ impl<
         }
     }
 
-    fn fix_remove(&mut self, mut node_index: u32) -> Option<()> {
+    fn fix_remove(&mut self, mut node_index: u32, parent_dir: Option<(u32, u32)>) {
         if node_index == SENTINEL {
-            return Some(());
+            return;
         }
         while node_index != self.root as u32 && self.is_black(node_index) {
-            let parent = self.get_parent(node_index);
-            let dir = self.child_dir(parent, node_index);
+            let (parent, dir) = if node_index == SENTINEL {
+                parent_dir.unwrap()
+            } else {
+                let parent = self.get_parent(node_index);
+                let dir = self.child_dir(parent, node_index);
+                (parent, dir)
+            };
             let mut sibling = self.get_child(parent, opposite(dir));
             if self.is_red(sibling) {
                 self.color_black(sibling);
                 self.color_red(parent);
                 self.rotate_dir(parent, dir);
-                sibling = self.get_right(self.get_parent(node_index));
+                sibling = self.get_dir(parent, opposite(dir));
             }
             if self.is_black(self.get_left(sibling)) && self.is_black(self.get_right(sibling)) {
                 self.color_red(sibling);
-                node_index = self.get_parent(node_index);
+                node_index = parent;
             } else {
-                if self.is_black(self.get_right(sibling)) {
-                    self.color_black(self.get_left(sibling));
+                if self.is_black(self.get_dir(sibling, opposite(dir))) {
+                    self.color_black(self.get_dir(sibling, dir));
                     self.color_red(sibling);
                     self.rotate_dir(sibling, opposite(dir));
-                    sibling = self.get_right(self.get_parent(node_index));
+                    sibling = self.get_dir(parent, opposite(dir));
                 }
-
-                let parent = self.get_parent(node_index);
-                if self.is_red(parent) {
-                    self.color_red(sibling);
-                } else {
-                    self.color_black(sibling);
-                }
+                self.color_node(sibling, self.get_color(parent));
                 self.color_black(parent);
-                self.color_black(self.get_right(sibling));
+                self.color_black(self.get_dir(sibling, opposite(dir)));
                 self.rotate_dir(parent, dir);
                 node_index = self.root as u32;
             }
         }
-        Some(())
+        self.color_black(node_index);
     }
 
     fn _remove(&mut self, key: &K) -> Option<V> {
-        let mut ref_node_index = self.root as u32;
-        if ref_node_index == SENTINEL {
+        let mut curr_node_index = self.root as u32;
+        if curr_node_index == SENTINEL {
             return None;
         }
         loop {
-            let ref_key = self.allocator.get(ref_node_index).get_value().key;
-            let ref_value = self.allocator.get(ref_node_index).get_value().value;
-            let left = self.get_left(ref_node_index);
-            let right = self.get_right(ref_node_index);
-            let target = if *key < ref_key {
+            let curr_key = self.allocator.get(curr_node_index).get_value().key;
+            let curr_value = self.allocator.get(curr_node_index).get_value().value;
+            let left = self.get_left(curr_node_index);
+            let right = self.get_right(curr_node_index);
+            let target = if *key < curr_key {
                 left
-            } else if *key > ref_key {
+            } else if *key > curr_key {
                 right
             } else {
-                let mut is_black = self.is_black(ref_node_index);
-                let (pivot_node_index, delete_node_index) = if left == SENTINEL {
-                    self.transplant(ref_node_index, right);
-                    // After this step, the node to be deleted has no more childre
-                    self.allocator
-                        .clear_register(ref_node_index, Field::Right as u32);
-                    (right, ref_node_index)
+                // We have found the node to remove
+                let mut is_black = self.is_black(curr_node_index);
+                let (pivot_node_index, parent_dir) = if left == SENTINEL {
+                    self.transplant(curr_node_index, right);
+                    (right, None)
                 } else if right == SENTINEL {
-                    self.transplant(ref_node_index, left);
-                    // After this step, the node to be deleted has no more childre
-                    self.allocator
-                        .clear_register(ref_node_index, Field::Left as u32);
-                    (left, ref_node_index)
+                    self.transplant(curr_node_index, left);
+                    (left, None)
                 } else {
-                    let min_right = self.find_min(right);
-                    let min_right_child = self.get_right(min_right);
-                    is_black = self.is_black(min_right);
-                    if min_right == right {
-                        assert!(
-                            min_right_child == SENTINEL
-                                || self.get_parent(min_right_child) == right
+                    // Find the largest node in the left subtree
+                    let mut parent_dir = None;
+                    let max_left = self.find_max(left);
+                    let max_left_child = self.get_left(max_left);
+                    is_black = self.is_black(max_left);
+                    // If max_left is not equal to root of the left subtree, then
+                    // replace the root of the left subtree with max_left and replace
+                    // max_left with max_left's child
+                    if self.get_parent(max_left) != curr_node_index {
+                        self.transplant(max_left, max_left_child);
+                        self.connect(
+                            max_left,
+                            self.get_left(curr_node_index),
+                            Field::Right as u32,
                         );
+                        if max_left_child == SENTINEL {
+                            parent_dir = Some((self.get_parent(max_left), Field::Right as u32));
+                        }
                     } else {
-                        self.transplant(min_right, min_right_child);
-                        self.connect(min_right, right, Field::Right as u32);
+                        if max_left_child == SENTINEL {
+                            parent_dir = Some((max_left, Field::Left as u32));
+                        }
                     }
-                    self.transplant(ref_node_index, min_right);
-                    self.connect(min_right, left, Field::Left as u32);
-                    if self.is_red(ref_node_index) {
-                        self.color_red(min_right)
-                    } else {
-                        self.color_black(min_right)
-                    }
-                    self.allocator
-                        .clear_register(ref_node_index, Field::Left as u32);
-                    self.allocator
-                        .clear_register(ref_node_index, Field::Right as u32);
-                    (min_right_child, ref_node_index)
+                    // Complete the transplant of max_left
+                    self.transplant(curr_node_index, max_left);
+                    self.connect(
+                        max_left,
+                        self.get_right(curr_node_index),
+                        Field::Right as u32,
+                    );
+                    self.color_node(max_left, self.get_color(curr_node_index));
+
+                    (max_left_child, parent_dir)
                 };
-                // The parent register and color register of the removed node are cleared
-                self.allocator
-                    .clear_register(ref_node_index, Field::Parent as u32);
-                self.allocator.clear_register(delete_node_index, COLOR);
-                // The removed node is added to the free list
-                self.allocator.remove_node(delete_node_index);
-                // This condition will short circuit if the removed node is red
-                // Otherwise, the fixup function will be called to restore the
-                // red-black tree properties
-                if is_black && self.fix_remove(pivot_node_index).is_none() {
-                    return None;
+
+                // Completely remove the current node index from the tree
+                self.remove_node(curr_node_index);
+
+                if is_black {
+                    self.fix_remove(pivot_node_index, parent_dir);
                 }
-                return Some(ref_value);
+                return Some(curr_value);
             };
             if target == SENTINEL {
                 return None;
             }
-            ref_node_index = target
+            curr_node_index = target
         }
     }
 
@@ -633,7 +722,7 @@ impl<
 
 impl<
         'a,
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > IntoIterator for &'a RedBlackTree<K, V, MAX_SIZE>
@@ -647,7 +736,7 @@ impl<
 
 impl<
         'a,
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > IntoIterator for &'a mut RedBlackTree<K, V, MAX_SIZE>
@@ -661,7 +750,7 @@ impl<
 
 pub struct RedBlackTreeIterator<
     'a,
-    K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+    K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
     const MAX_SIZE: usize,
 > {
@@ -673,7 +762,7 @@ pub struct RedBlackTreeIterator<
 
 impl<
         'a,
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > Iterator for RedBlackTreeIterator<'a, K, V, MAX_SIZE>
@@ -698,7 +787,7 @@ impl<
 
 impl<
         'a,
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > DoubleEndedIterator for RedBlackTreeIterator<'a, K, V, MAX_SIZE>
@@ -721,7 +810,7 @@ impl<
 
 pub struct RedBlackTreeIteratorMut<
     'a,
-    K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+    K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
     const MAX_SIZE: usize,
 > {
@@ -733,7 +822,7 @@ pub struct RedBlackTreeIteratorMut<
 
 impl<
         'a,
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > Iterator for RedBlackTreeIteratorMut<'a, K, V, MAX_SIZE>
@@ -768,7 +857,7 @@ impl<
 
 impl<
         'a,
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > DoubleEndedIterator for RedBlackTreeIteratorMut<'a, K, V, MAX_SIZE>
@@ -800,7 +889,7 @@ impl<
 }
 
 impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > Index<&K> for RedBlackTree<K, V, MAX_SIZE>
@@ -813,7 +902,7 @@ impl<
 }
 
 impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
+        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > IndexMut<&K> for RedBlackTree<K, V, MAX_SIZE>
@@ -1076,4 +1165,53 @@ fn test_right_insert_with_red_left_child_parent_and_black_uncle() {
     assert_eq!(tree.get_parent(grandparent), leaf);
     assert_eq!(tree.get_parent(parent), leaf);
     assert!(tree.is_leaf(parent) && tree.is_leaf(grandparent));
+}
+
+#[test]
+fn test_delete_multiple_random() {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    type RBT = RedBlackTree<u64, u64, 32>;
+    let mut buf = vec![0u8; std::mem::size_of::<RBT>()];
+    let sample_tree = RBT::new_from_slice(buf.as_mut_slice());
+    let mut dummy_keys = vec![];
+    // Fill up tree
+    for k in 0..32 {
+        let mut hasher = DefaultHasher::new();
+        (k as u64).hash(&mut hasher);
+        let key = hasher.finish();
+        sample_tree.insert(key, 0).unwrap();
+        assert!(sample_tree.is_valid_red_black_tree());
+        dummy_keys.push(key);
+    }
+
+    let mut keys = vec![];
+    let mut buf = vec![0u8; std::mem::size_of::<RBT>()];
+    let index_tree = RBT::new_from_slice(buf.as_mut_slice());
+    let key_to_index = sample_tree
+        .iter()
+        .enumerate()
+        .map(|(i, (k, _))| (*k, i as u64))
+        .collect::<BTreeMap<_, _>>();
+
+    for k in dummy_keys.iter() {
+        let i = key_to_index[k];
+        println!("Inserting {} -> {}", k, i);
+        index_tree.insert(i, 0).unwrap();
+        keys.push(i);
+        assert!(index_tree.is_valid_red_black_tree());
+    }
+
+    sample_tree.pretty_print();
+    index_tree.pretty_print();
+
+    for i in keys.iter() {
+        println!("Removing {}", i);
+        index_tree.remove(&i).unwrap();
+        index_tree.pretty_print();
+        assert!(index_tree.is_valid_red_black_tree());
+        if *i == 6 {
+            panic!("Stop here");
+        }
+    }
 }
