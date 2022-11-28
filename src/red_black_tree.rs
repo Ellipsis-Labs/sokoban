@@ -624,8 +624,12 @@ impl<
         // Completely remove the current node index from the tree
         self._remove_allocator_node(node_index);
 
-        if is_black && !self.is_root(pivot_node_index) {
-            self._fix_remove(pivot_node_index, parent_and_dir);
+        if is_black {
+            if self.is_root(pivot_node_index) {
+                self._color_black(pivot_node_index);
+            } else {
+                self._fix_remove(pivot_node_index, parent_and_dir);
+            }
         }
     }
 
@@ -1186,7 +1190,7 @@ fn test_right_insert_with_red_left_child_parent_and_black_uncle() {
 }
 
 #[test]
-fn test_delete_multiple_random() {
+fn test_delete_multiple_random_1024() {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     type Rbt = RedBlackTree<u64, u64, 1024>;
@@ -1206,5 +1210,53 @@ fn test_delete_multiple_random() {
     for i in keys.iter() {
         tree.remove(i).unwrap();
         assert!(tree.is_valid_red_black_tree());
+    }
+}
+
+#[test]
+fn test_delete_multiple_random_2048() {
+    use std::collections::{hash_map::DefaultHasher, BTreeMap};
+    use std::hash::{Hash, Hasher};
+    type Rbt = RedBlackTree<u64, u64, 2048>;
+    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
+    let mut keys = vec![];
+    // Fill up tree
+    for k in 0..2048 {
+        let mut hasher = DefaultHasher::new();
+        (k as u64).hash(&mut hasher);
+        let key = hasher.finish();
+        tree.insert(key, 0).unwrap();
+        keys.push(key);
+    }
+
+    let key_to_index = keys
+        .iter()
+        .enumerate()
+        .map(|(i, k)| (*k, i as u64))
+        .collect::<BTreeMap<_, _>>();
+
+    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+    let index_tree = Rbt::new_from_slice(buf.as_mut_slice());
+    let mut index_keys = vec![];
+
+    for k in keys.iter() {
+        let key = key_to_index[k];
+        index_tree.insert(key, 0).unwrap();
+        index_keys.push(key);
+    }
+
+    assert!(index_tree.is_valid_red_black_tree());
+    for i in index_keys.iter() {
+        println!("Removing {}", i);
+        let prev = index_tree.clone();
+        index_tree.remove(i).unwrap();
+        if !index_tree.is_valid_red_black_tree() {
+            prev.pretty_print();
+            println!();
+            index_tree.pretty_print();
+            println!("Removing {} resulted in an invalid tree", i);
+            panic!("Tree is not valid");
+        }
     }
 }
