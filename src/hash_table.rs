@@ -389,9 +389,9 @@ pub struct HashTableIterator<
     const NUM_BUCKETS: usize,
     const MAX_SIZE: usize,
 > {
-    pub ht: &'a HashTable<K, V, NUM_BUCKETS, MAX_SIZE>,
-    pub bucket: usize,
-    pub node: u32,
+    ht: &'a HashTable<K, V, NUM_BUCKETS, MAX_SIZE>,
+    bucket: usize,
+    node: u32,
 }
 
 impl<
@@ -443,9 +443,9 @@ pub struct HashTableIteratorMut<
     const NUM_BUCKETS: usize,
     const MAX_SIZE: usize,
 > {
-    pub ht: &'a mut HashTable<K, V, NUM_BUCKETS, MAX_SIZE>,
-    pub bucket: usize,
-    pub node: u32,
+    ht: &'a mut HashTable<K, V, NUM_BUCKETS, MAX_SIZE>,
+    bucket: usize,
+    node: u32,
 }
 
 impl<

@@ -652,10 +652,10 @@ pub struct AVLTreeIterator<
     V: Default + Copy + Clone + Pod + Zeroable,
     const MAX_SIZE: usize,
 > {
-    pub tree: &'a AVLTree<K, V, MAX_SIZE>,
-    pub stack: Vec<u32>,
-    pub rev_stack: Vec<u32>,
-    pub node: u32,
+    tree: &'a AVLTree<K, V, MAX_SIZE>,
+    stack: Vec<u32>,
+    rev_stack: Vec<u32>,
+    node: u32,
 }
 
 impl<
@@ -712,10 +712,10 @@ pub struct AVLTreeIteratorMut<
     V: Default + Copy + Clone + Pod + Zeroable,
     const MAX_SIZE: usize,
 > {
-    pub tree: &'a mut AVLTree<K, V, MAX_SIZE>,
-    pub stack: Vec<u32>,
-    pub rev_stack: Vec<u32>,
-    pub node: u32,
+    tree: &'a mut AVLTree<K, V, MAX_SIZE>,
+    stack: Vec<u32>,
+    rev_stack: Vec<u32>,
+    node: u32,
 }
 
 impl<

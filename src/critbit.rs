@@ -548,9 +548,9 @@ pub struct CritbitIterator<
     const MAX_NODES: usize,
     const MAX_SIZE: usize,
 > {
-    pub tree: &'a Critbit<V, MAX_NODES, MAX_SIZE>,
-    pub stack: Vec<u32>,
-    pub rev_stack: Vec<u32>,
+    tree: &'a Critbit<V, MAX_NODES, MAX_SIZE>,
+    stack: Vec<u32>,
+    rev_stack: Vec<u32>,
 }
 
 impl<
@@ -619,9 +619,9 @@ pub struct CritbitIteratorMut<
     const MAX_NODES: usize,
     const MAX_SIZE: usize,
 > {
-    pub tree: &'a mut Critbit<V, MAX_NODES, MAX_SIZE>,
-    pub stack: Vec<u32>,
-    pub rev_stack: Vec<u32>,
+    tree: &'a mut Critbit<V, MAX_NODES, MAX_SIZE>,
+    stack: Vec<u32>,
+    rev_stack: Vec<u32>,
 }
 
 impl<
