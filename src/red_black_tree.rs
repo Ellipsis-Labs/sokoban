@@ -5,6 +5,7 @@ use std::{
     cmp::Ordering,
     fmt::Debug,
     ops::{Index, IndexMut},
+    vec,
 };
 
 use crate::node_allocator::{
@@ -697,21 +698,21 @@ impl<
     }
 
     pub fn get_addr(&self, key: &K) -> u32 {
-        let mut reference_node = self.root;
-        if reference_node == SENTINEL {
+        let mut node_index = self.root;
+        if node_index == SENTINEL {
             return SENTINEL;
         }
         loop {
-            let ref_value = self.allocator.get(reference_node).get_value().key;
-            let target = match key.cmp(&ref_value) {
-                Ordering::Less => self.get_left(reference_node),
-                Ordering::Greater => self.get_right(reference_node),
-                Ordering::Equal => reference_node,
+            let curr_key = self.get_node(node_index).key;
+            let target = match key.cmp(&curr_key) {
+                Ordering::Less => self.get_left(node_index),
+                Ordering::Greater => self.get_right(node_index),
+                Ordering::Equal => return node_index,
             };
             if target == SENTINEL {
                 return SENTINEL;
             }
-            reference_node = target
+            node_index = target
         }
     }
 
@@ -1231,14 +1232,19 @@ fn test_delete_multiple_random_1024() {
     let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
     let tree = Rbt::new_from_slice(buf.as_mut_slice());
     let mut keys = vec![];
+    let mut addrs = vec![];
     // Fill up tree
     for k in 0..1024 {
         let mut hasher = DefaultHasher::new();
         (k as u64).hash(&mut hasher);
         let key = hasher.finish();
-        tree.insert(key, 0).unwrap();
+        addrs.push(tree.insert(key, 0).unwrap());
         keys.push(key);
         assert!(tree.is_valid_red_black_tree());
+    }
+
+    for (k, a) in keys.iter().zip(addrs) {
+        assert!(tree.get_addr(k) == a);
     }
 
     for i in keys.iter() {
