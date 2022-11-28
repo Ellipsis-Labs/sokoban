@@ -298,6 +298,7 @@ impl<
         }
         // The root must be black
         if self.is_red(self.root) {
+            println!("Invalid Red-Black Tree: Root is red");
             return false;
         }
 
@@ -317,13 +318,21 @@ impl<
                 }
                 // Red nodes cannot have red children
                 if self.is_red(node_index) && self.is_red(child) {
+                    println!(
+                        "Invalid Red-Black Tree: Red node (key: {:?}) has red child",
+                        self.get_node(node_index).key
+                    );
                     return false;
                 }
                 stack.push((child, count));
             }
         }
         // All paths from root to leaf must have the same number of black nodes
-        black_count.iter().all(|&x| x == black_count[0])
+        let balanced = black_count.iter().all(|&x| x == black_count[0]);
+        if !balanced {
+            println!("Invalid Red-Black Tree: All paths must have the same number of black nodes",);
+        }
+        balanced
     }
 
     pub fn new() -> Self {
