@@ -483,21 +483,21 @@ impl<
     }
 
     fn _insert(&mut self, key: K, value: V) -> Option<u32> {
-        let mut reference_node = self.root;
+        let mut node_index = self.root;
         let new_node = RBNode::<K, V>::new(key, value);
-        if reference_node == SENTINEL {
+        if node_index == SENTINEL {
             let node_index = self.allocator.add_node(new_node);
             self.root = node_index;
             return Some(node_index);
         }
         loop {
-            let curr_key = self.get_node(reference_node).key;
+            let curr_key = self.get_node(node_index).key;
             let (target, dir) = match key.cmp(&curr_key) {
-                Ordering::Less => (self.get_left(reference_node), Field::Left as u32),
-                Ordering::Greater => (self.get_right(reference_node), Field::Right as u32),
+                Ordering::Less => (self.get_left(node_index), Field::Left as u32),
+                Ordering::Greater => (self.get_right(node_index), Field::Right as u32),
                 Ordering::Equal => {
-                    self.get_node_mut(reference_node).value = value;
-                    return Some(reference_node);
+                    self.get_node_mut(node_index).value = value;
+                    return Some(node_index);
                 }
             };
             if target == SENTINEL {
@@ -506,15 +506,15 @@ impl<
                 }
                 let node_index = self.allocator.add_node(new_node);
                 self._color_red(node_index);
-                self._connect(reference_node, node_index, dir);
-                let grandparent = self.get_parent(reference_node);
+                self._connect(node_index, node_index, dir);
+                let grandparent = self.get_parent(node_index);
                 // This is only false when the parent is the root
                 if grandparent != SENTINEL {
                     self._fix_insert(node_index);
                 }
                 return Some(node_index);
             }
-            reference_node = target
+            node_index = target
         }
     }
 
