@@ -2,7 +2,7 @@ use bytemuck::{Pod, Zeroable};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use std::{
-    fmt::{Debug, Display},
+    fmt::Debug,
     ops::{Index, IndexMut},
 };
 
@@ -67,8 +67,8 @@ pub struct RedBlackTree<
     V: Default + Copy + Clone + Pod + Zeroable,
     const MAX_SIZE: usize,
 > {
-    pub root: u64,
-    _padding: u64,
+    pub root: u32,
+    _padding: [u32; 3],
     allocator: NodeAllocator<RBNode<K, V>, MAX_SIZE, 4>,
 }
 
@@ -104,8 +104,8 @@ impl<
     fn default() -> Self {
         Self::assert_proper_alignment();
         RedBlackTree {
-            root: SENTINEL as u64,
-            _padding: 0,
+            root: SENTINEL,
+            _padding: [0; 3],
             allocator: NodeAllocator::<RBNode<K, V>, MAX_SIZE, 4>::default(),
         }
     }
@@ -144,7 +144,7 @@ impl<
     }
 
     fn get(&self, key: &K) -> Option<&V> {
-        let mut reference_node = self.root as u32;
+        let mut reference_node = self.root;
         if reference_node == SENTINEL {
             return None;
         }
@@ -165,7 +165,7 @@ impl<
     }
 
     fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        let mut reference_node = self.root as u32;
+        let mut reference_node = self.root;
         if reference_node == SENTINEL {
             return None;
         }
@@ -188,6 +188,15 @@ impl<
     fn size(&self) -> usize {
         self.allocator.size as usize
     }
+
+    fn len(&self) -> usize {
+        self.allocator.size as usize
+    }
+
+    fn capacity(&self) -> usize {
+        MAX_SIZE
+    }
+
     fn iter(&self) -> Box<dyn DoubleEndedIterator<Item = (&K, &V)> + '_> {
         Box::new(self._iter())
     }
@@ -204,11 +213,11 @@ impl<
     > OrderedNodeAllocatorMap<K, V> for RedBlackTree<K, V, MAX_SIZE>
 {
     fn get_min_index(&mut self) -> u32 {
-        self.find_min(self.root as u32)
+        self._find_min(self.root)
     }
 
     fn get_max_index(&mut self) -> u32 {
-        self.find_max(self.root as u32)
+        self._find_max(self.root)
     }
 
     fn get_min(&mut self) -> Option<(K, V)> {
@@ -238,15 +247,12 @@ impl<
         const MAX_SIZE: usize,
     > RedBlackTree<K, V, MAX_SIZE>
 {
-    pub fn pretty_print(&self)
-    where
-        K: Debug + Display,
-    {
-        if self.size() == 0 {
+    pub fn pretty_print(&self) {
+        if self.len() == 0 {
             return;
         }
         let mut s = String::new();
-        let mut stack = vec![(self.root as u32, "".to_string(), "".to_string())];
+        let mut stack = vec![(self.root, "".to_string(), "".to_string())];
 
         while !stack.is_empty() {
             let (node, mut padding, pointer) = stack.pop().unwrap();
@@ -286,15 +292,15 @@ impl<
     }
 
     pub fn is_valid_red_black_tree(&self) -> bool {
-        if self.size() == 0 {
+        if self.len() == 0 {
             return true;
         }
         // The root must be black
-        if self.is_red(self.root as u32) {
+        if self.is_red(self.root) {
             return false;
         }
 
-        let mut stack = vec![(self.root as u32, 0)];
+        let mut stack = vec![(self.root, 0)];
         let mut black_count = vec![];
 
         while !stack.is_empty() {
@@ -337,41 +343,46 @@ impl<
     }
 
     #[inline(always)]
-    fn color_red(&mut self, node: u32) {
+    fn _color_red(&mut self, node: u32) {
         if node != SENTINEL {
             self.allocator.set_register(node, Color::Red as u32, COLOR);
         }
     }
 
     #[inline(always)]
-    fn color_black(&mut self, node: u32) {
+    fn _color_black(&mut self, node: u32) {
         self.allocator
             .set_register(node, Color::Black as u32, COLOR);
     }
 
     #[inline(always)]
-    fn color_node(&mut self, node: u32, color: u32) {
+    fn _color_node(&mut self, node: u32, color: u32) {
         self.allocator.set_register(node, color, COLOR);
     }
 
     #[inline(always)]
-    fn is_red(&self, node: u32) -> bool {
+    pub fn is_red(&self, node: u32) -> bool {
         self.allocator.get_register(node, COLOR) == Color::Red as u32
     }
 
     #[inline(always)]
-    fn is_black(&self, node: u32) -> bool {
+    pub fn is_black(&self, node: u32) -> bool {
         self.allocator.get_register(node, COLOR) == Color::Black as u32
     }
 
     #[inline(always)]
-    fn get_child(&self, node: u32, dir: u32) -> u32 {
+    pub fn get_child(&self, node: u32, dir: u32) -> u32 {
         self.allocator.get_register(node, dir)
     }
 
     #[inline(always)]
     pub fn is_leaf(&self, node: u32) -> bool {
         self.get_left(node) == SENTINEL && self.get_right(node) == SENTINEL
+    }
+
+    #[inline(always)]
+    pub fn is_root(&self, node: u32) -> bool {
+        self.root == node
     }
 
     pub fn get_dir(&self, node: u32, dir: u32) -> u32 {
@@ -402,7 +413,7 @@ impl<
         self.allocator.get_register(node, Field::Parent as u32)
     }
 
-    fn remove_node(&mut self, node: u32) {
+    fn _remove_allocator_node(&mut self, node: u32) {
         // Clear all registers
         self.allocator.clear_register(node, Field::Parent as u32);
         self.allocator.clear_register(node, COLOR);
@@ -413,13 +424,13 @@ impl<
     }
 
     #[inline(always)]
-    fn connect(&mut self, parent: u32, child: u32, dir: u32) {
+    fn _connect(&mut self, parent: u32, child: u32, dir: u32) {
         self.allocator
             .connect(parent, child, dir, Field::Parent as u32);
     }
 
     #[inline(always)]
-    fn child_dir(&self, parent: u32, child: u32) -> u32 {
+    fn _child_dir(&self, parent: u32, child: u32) -> u32 {
         let left = self.get_left(parent);
         let right = self.get_right(parent);
         if child == left {
@@ -431,7 +442,7 @@ impl<
         }
     }
 
-    fn rotate_dir(&mut self, parent_index: u32, dir: u32) -> Option<u32> {
+    fn _rotate_dir(&mut self, parent_index: u32, dir: u32) -> Option<u32> {
         let grandparent_index = self.get_parent(parent_index);
         if !matches!(
             FromPrimitive::from_u32(dir),
@@ -444,59 +455,28 @@ impl<
             return None;
         }
         let child_index = self.get_child(sibling_index, dir);
-        self.connect(sibling_index, parent_index, dir);
-        self.connect(parent_index, child_index, opposite(dir));
+        self._connect(sibling_index, parent_index, dir);
+        self._connect(parent_index, child_index, opposite(dir));
         if grandparent_index != SENTINEL {
-            self.connect(
+            self._connect(
                 grandparent_index,
                 sibling_index,
-                self.child_dir(grandparent_index, parent_index),
+                self._child_dir(grandparent_index, parent_index),
             );
         } else {
             self.allocator
                 .clear_register(sibling_index, Field::Parent as u32);
-            self.root = sibling_index as u64;
+            self.root = sibling_index;
         }
         Some(sibling_index)
     }
 
-    fn fix_insert(&mut self, mut node: u32) -> Option<()> {
-        while self.is_red(self.get_parent(node)) {
-            let mut parent = self.get_parent(node);
-            let mut grandparent = self.get_parent(parent);
-            if grandparent == SENTINEL {
-                assert!(parent == self.root as u32);
-                break;
-            }
-            let dir = self.child_dir(grandparent, parent);
-            let uncle = self.get_child(grandparent, opposite(dir));
-            if self.is_red(uncle) {
-                self.color_black(uncle);
-                self.color_black(parent);
-                self.color_red(grandparent);
-                node = grandparent;
-            } else {
-                if self.child_dir(parent, node) == opposite(dir) {
-                    self.rotate_dir(parent, dir);
-                    node = parent;
-                }
-                parent = self.get_parent(node);
-                grandparent = self.get_parent(parent);
-                self.color_black(parent);
-                self.color_red(grandparent);
-                self.rotate_dir(grandparent, opposite(dir));
-            }
-        }
-        self.color_black(self.root as u32);
-        Some(())
-    }
-
     fn _insert(&mut self, key: K, value: V) -> Option<u32> {
-        let mut reference_node = self.root as u32;
+        let mut reference_node = self.root;
         let new_node = RBNode::<K, V>::new(key, value);
         if reference_node == SENTINEL {
             let node_index = self.allocator.add_node(new_node);
-            self.root = node_index as u64;
+            self.root = node_index;
             return Some(node_index);
         }
         loop {
@@ -510,16 +490,16 @@ impl<
                 return Some(reference_node);
             };
             if target == SENTINEL {
-                if self.size() >= MAX_SIZE {
+                if self.len() >= self.capacity() {
                     return None;
                 }
                 let node_index = self.allocator.add_node(new_node);
-                self.color_red(node_index);
-                self.connect(reference_node, node_index, dir);
+                self._color_red(node_index);
+                self._connect(reference_node, node_index, dir);
                 let grandparent = self.get_parent(reference_node);
                 // This is only false when the parent is the root
                 if grandparent != SENTINEL {
-                    self.fix_insert(node_index);
+                    self._fix_insert(node_index);
                 }
                 return Some(node_index);
             }
@@ -527,40 +507,35 @@ impl<
         }
     }
 
-    fn fix_remove(&mut self, mut node_index: u32, parent_dir: Option<(u32, u32)>) {
-        while node_index != self.root as u32 && self.is_black(node_index) {
-            let (parent, dir) = if node_index == SENTINEL {
-                parent_dir.unwrap()
-            } else {
-                let parent = self.get_parent(node_index);
-                let dir = self.child_dir(parent, node_index);
-                (parent, dir)
-            };
-            let mut sibling = self.get_child(parent, opposite(dir));
-            if self.is_red(sibling) {
-                self.color_black(sibling);
-                self.color_red(parent);
-                self.rotate_dir(parent, dir);
-                sibling = self.get_dir(parent, opposite(dir));
+    fn _fix_insert(&mut self, mut node: u32) -> Option<()> {
+        while self.is_red(self.get_parent(node)) {
+            let mut parent = self.get_parent(node);
+            let mut grandparent = self.get_parent(parent);
+            if grandparent == SENTINEL {
+                assert!(self.is_root(parent));
+                break;
             }
-            if self.is_black(self.get_left(sibling)) && self.is_black(self.get_right(sibling)) {
-                self.color_red(sibling);
-                node_index = parent;
+            let dir = self._child_dir(grandparent, parent);
+            let uncle = self.get_child(grandparent, opposite(dir));
+            if self.is_red(uncle) {
+                self._color_black(uncle);
+                self._color_black(parent);
+                self._color_red(grandparent);
+                node = grandparent;
             } else {
-                if self.is_black(self.get_dir(sibling, opposite(dir))) {
-                    self.color_black(self.get_dir(sibling, dir));
-                    self.color_red(sibling);
-                    self.rotate_dir(sibling, opposite(dir));
-                    sibling = self.get_dir(parent, opposite(dir));
+                if self._child_dir(parent, node) == opposite(dir) {
+                    self._rotate_dir(parent, dir);
+                    node = parent;
                 }
-                self.color_node(sibling, self.get_color(parent));
-                self.color_black(parent);
-                self.color_black(self.get_dir(sibling, opposite(dir)));
-                self.rotate_dir(parent, dir);
-                node_index = self.root as u32;
+                parent = self.get_parent(node);
+                grandparent = self.get_parent(parent);
+                self._color_black(parent);
+                self._color_red(grandparent);
+                self._rotate_dir(grandparent, opposite(dir));
             }
         }
-        self.color_black(node_index);
+        self._color_black(self.root as u32);
+        Some(())
     }
 
     fn _remove(&mut self, key: &K) -> Option<V> {
@@ -571,79 +546,12 @@ impl<
         loop {
             let curr_key = self.allocator.get(curr_node_index).get_value().key;
             let curr_value = self.allocator.get(curr_node_index).get_value().value;
-            let left = self.get_left(curr_node_index);
-            let right = self.get_right(curr_node_index);
             let target = if *key < curr_key {
-                left
+                self.get_left(curr_node_index)
             } else if *key > curr_key {
-                right
+                self.get_right(curr_node_index)
             } else {
-                // We have found the node to remove
-                let mut is_black = self.is_black(curr_node_index);
-                let (pivot_node_index, parent_dir) = if self.is_leaf(curr_node_index) {
-                    if curr_node_index != self.root as u32 {
-                        let parent = self.get_parent(curr_node_index);
-                        let dir = self.child_dir(parent, curr_node_index);
-                        // Remove pointer to the removed leaf node
-                        self.connect(parent, SENTINEL, dir);
-                        (SENTINEL, Some((parent, dir)))
-                    } else {
-                        // Don't run fix_remove when there is only 1 node remaining
-                        is_black = false;
-                        (SENTINEL, None)
-                    }
-                } else if left == SENTINEL {
-                    self.transplant(curr_node_index, right);
-                    (right, None)
-                } else if right == SENTINEL {
-                    self.transplant(curr_node_index, left);
-                    (left, None)
-                } else {
-                    // Find the largest node in the left subtree
-                    let mut parent_dir = None;
-                    let max_left = self.find_max(left);
-                    let max_left_parent = self.get_parent(max_left);
-                    let max_left_child = self.get_left(max_left);
-                    is_black = self.is_black(max_left);
-
-                    // If max_left is not equal to root of the left subtree, then
-                    // replace the root of the left subtree with max_left and replace
-                    // max_left with max_left's child
-                    if self.get_parent(max_left) != curr_node_index {
-                        self.transplant(max_left, max_left_child);
-                        // We perform this operation in the conditional because we don't
-                        // want to form a cycle
-                        self.connect(max_left, self.get_left(curr_node_index), Field::Left as u32);
-                        if max_left_child == SENTINEL {
-                            parent_dir = Some((max_left_parent, Field::Right as u32));
-                        }
-                    } else {
-                        // The only time this can be true is when the left subtree is
-                        // a single node
-                        if max_left_child == SENTINEL {
-                            parent_dir = Some((max_left, Field::Left as u32));
-                        }
-                    }
-
-                    // Complete the transplant of max_left
-                    self.transplant(curr_node_index, max_left);
-                    self.connect(
-                        max_left,
-                        self.get_right(curr_node_index),
-                        Field::Right as u32,
-                    );
-
-                    self.color_node(max_left, self.get_color(curr_node_index));
-
-                    (max_left_child, parent_dir)
-                };
-
-                // Completely remove the current node index from the tree
-                self.remove_node(curr_node_index);
-
-                if is_black {
-                    self.fix_remove(pivot_node_index, parent_dir);
-                }
+                self._remove_tree_node(curr_node_index);
                 return Some(curr_value);
             };
             if target == SENTINEL {
@@ -653,23 +561,127 @@ impl<
         }
     }
 
+    fn _remove_tree_node(&mut self, node_index: u32) {
+        let mut is_black = self.is_black(node_index);
+        let left = self.get_left(node_index);
+        let right = self.get_right(node_index);
+        let (pivot_node_index, parent_and_dir) = if self.is_leaf(node_index) {
+            if !self.is_root(node_index) {
+                let parent = self.get_parent(node_index);
+                let dir = self._child_dir(parent, node_index);
+                // Remove pointer to the removed leaf node
+                self._connect(parent, SENTINEL, dir);
+                (SENTINEL, Some((parent, dir)))
+            } else {
+                // Set the root to SENTINEL
+                self.root = SENTINEL;
+                (SENTINEL, None)
+            }
+        } else if left == SENTINEL {
+            self._transplant(node_index, right);
+            (right, None)
+        } else if right == SENTINEL {
+            self._transplant(node_index, left);
+            (left, None)
+        } else {
+            // Find the largest node in the left subtree
+            let mut parent_and_dir = None;
+            let max_left = self._find_max(left);
+            let max_left_parent = self.get_parent(max_left);
+            let max_left_child = self.get_left(max_left);
+            is_black = self.is_black(max_left);
+
+            // If max_left is not equal to root of the left subtree, then
+            // replace the root of the left subtree with max_left and replace
+            // max_left with max_left_child
+            if self.get_parent(max_left) != node_index {
+                self._transplant(max_left, max_left_child);
+                // We perform this operation in the conditional because we do not
+                // want to form a cycle
+                self._connect(max_left, self.get_left(node_index), Field::Left as u32);
+                if max_left_child == SENTINEL {
+                    parent_and_dir = Some((max_left_parent, Field::Right as u32));
+                }
+            } else if max_left_child == SENTINEL {
+                // The only time this is called is is when the left subtree is
+                // a single node
+                assert!(self.is_leaf(max_left));
+                parent_and_dir = Some((max_left, Field::Left as u32));
+            }
+
+            // Complete the transplant of max_left
+            self._transplant(node_index, max_left);
+            self._connect(max_left, self.get_right(node_index), Field::Right as u32);
+
+            self._color_node(max_left, self.get_color(node_index));
+
+            (max_left_child, parent_and_dir)
+        };
+
+        // Completely remove the current node index from the tree
+        self._remove_allocator_node(node_index);
+
+        if is_black && !self.is_root(pivot_node_index) {
+            self._fix_remove(pivot_node_index, parent_and_dir);
+        }
+    }
+
+    fn _fix_remove(&mut self, mut node_index: u32, parent_and_dir: Option<(u32, u32)>) {
+        let (mut parent, mut dir) = parent_and_dir.unwrap_or({
+            let parent = self.get_parent(node_index);
+            let dir = self._child_dir(parent, node_index);
+            (parent, dir)
+        });
+        loop {
+            let mut sibling = self.get_child(parent, opposite(dir));
+            if self.is_red(sibling) {
+                self._color_black(sibling);
+                self._color_red(parent);
+                self._rotate_dir(parent, dir);
+                sibling = self.get_dir(parent, opposite(dir));
+            }
+            if self.is_black(self.get_left(sibling)) && self.is_black(self.get_right(sibling)) {
+                self._color_red(sibling);
+                node_index = parent;
+            } else {
+                if self.is_black(self.get_dir(sibling, opposite(dir))) {
+                    self._color_black(self.get_dir(sibling, dir));
+                    self._color_red(sibling);
+                    self._rotate_dir(sibling, opposite(dir));
+                    sibling = self.get_dir(parent, opposite(dir));
+                }
+                self._color_node(sibling, self.get_color(parent));
+                self._color_black(parent);
+                self._color_black(self.get_dir(sibling, opposite(dir)));
+                self._rotate_dir(parent, dir);
+                node_index = self.root as u32;
+            }
+            if self.is_root(node_index) || self.is_red(node_index) {
+                break;
+            }
+            parent = self.get_parent(node_index);
+            dir = self._child_dir(parent, node_index);
+        }
+        self._color_black(node_index);
+    }
+
     #[inline(always)]
     /// This helper function connects the parent of `target` to `source`.
     /// It is the start of the process of removing `target` from the tree.
-    fn transplant(&mut self, target: u32, source: u32) {
+    fn _transplant(&mut self, target: u32, source: u32) {
         let parent = self.get_parent(target);
         if parent == SENTINEL {
-            self.root = source as u64;
+            self.root = source;
             self.allocator
                 .set_register(source, SENTINEL, Field::Parent as u32);
             return;
         }
-        let dir = self.child_dir(parent, target);
-        self.connect(parent, source, dir);
+        let dir = self._child_dir(parent, target);
+        self._connect(parent, source, dir);
     }
 
     pub fn get_addr(&self, key: &K) -> u32 {
-        let mut reference_node = self.root as u32;
+        let mut reference_node = self.root;
         if reference_node == SENTINEL {
             return SENTINEL;
         }
@@ -689,7 +701,7 @@ impl<
         }
     }
 
-    fn find_min(&self, index: u32) -> u32 {
+    fn _find_min(&self, index: u32) -> u32 {
         let mut node = index;
         while self.get_left(node) != SENTINEL {
             node = self.get_left(node);
@@ -697,7 +709,7 @@ impl<
         node
     }
 
-    fn find_max(&self, index: u32) -> u32 {
+    fn _find_max(&self, index: u32) -> u32 {
         let mut node = index;
         while self.get_right(node) != SENTINEL {
             node = self.get_right(node);
@@ -710,12 +722,12 @@ impl<
             tree: self,
             stack: vec![],
             rev_stack: vec![],
-            node: self.root as u32,
+            node: self.root,
         }
     }
 
     fn _iter_mut(&mut self) -> RedBlackTreeIteratorMut<'_, K, V, MAX_SIZE> {
-        let node = self.root as u32;
+        let node = self.root;
         RedBlackTreeIteratorMut::<K, V, MAX_SIZE> {
             tree: self,
             stack: vec![],
@@ -1174,44 +1186,24 @@ fn test_right_insert_with_red_left_child_parent_and_black_uncle() {
 
 #[test]
 fn test_delete_multiple_random() {
-    use std::collections::{hash_map::DefaultHasher, BTreeMap};
+    use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     type RBT = RedBlackTree<u64, u64, 1024>;
     let mut buf = vec![0u8; std::mem::size_of::<RBT>()];
-    let sample_tree = RBT::new_from_slice(buf.as_mut_slice());
-    let mut dummy_keys = vec![];
+    let tree = RBT::new_from_slice(buf.as_mut_slice());
+    let mut keys = vec![];
     // Fill up tree
     for k in 0..1024 {
         let mut hasher = DefaultHasher::new();
         (k as u64).hash(&mut hasher);
         let key = hasher.finish();
-        sample_tree.insert(key, 0).unwrap();
-        assert!(sample_tree.is_valid_red_black_tree());
-        dummy_keys.push(key);
+        tree.insert(key, 0).unwrap();
+        keys.push(key);
+        assert!(tree.is_valid_red_black_tree());
     }
-
-    let mut keys = vec![];
-    let mut buf = vec![0u8; std::mem::size_of::<RBT>()];
-    let index_tree = RBT::new_from_slice(buf.as_mut_slice());
-    let key_to_index = sample_tree
-        .iter()
-        .enumerate()
-        .map(|(i, (k, _))| (*k, i as u64))
-        .collect::<BTreeMap<_, _>>();
-
-    for k in dummy_keys.iter() {
-        let i = key_to_index[k];
-        index_tree.insert(i, 0).unwrap();
-        keys.push(i);
-        assert!(index_tree.is_valid_red_black_tree());
-    }
-
-    sample_tree.pretty_print();
-    index_tree.pretty_print();
 
     for i in keys.iter() {
-        index_tree.remove(&i).unwrap();
-        index_tree.pretty_print();
-        assert!(index_tree.is_valid_red_black_tree());
+        tree.remove(&i).unwrap();
+        assert!(tree.is_valid_red_black_tree());
     }
 }

@@ -142,6 +142,14 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         self.leaves.size as usize
     }
 
+    fn len(&self) -> usize {
+        self.leaves.size as usize
+    }
+
+    fn capacity(&self) -> usize {
+        MAX_SIZE
+    }
+
     fn iter(&self) -> Box<dyn DoubleEndedIterator<Item = (&u128, &V)> + '_> {
         Box::new(self._iter())
     }
@@ -388,7 +396,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
             return Some(self.root as u32);
         }
         // Return None if the tree is filled up
-        if self.size() >= MAX_SIZE {
+        if self.len() >= self.capacity() {
             return None;
         }
         let mut node_index = self.root as u32;
@@ -425,7 +433,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         let mut parent = self.root as u32;
         let mut child: u32;
         let mut is_right: bool;
-        if self.size() == 0 {
+        if self.len() == 0 {
             return None;
         }
         if self.is_inner_node(parent) {
@@ -437,7 +445,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
             let leaf = self.get_node(parent);
             if leaf.key == *key {
                 self.root = SENTINEL as u64;
-                assert!(self.size() == 1);
+                assert!(self.len() == 1);
                 return Some(self.remove_leaf(parent));
             } else {
                 return None;

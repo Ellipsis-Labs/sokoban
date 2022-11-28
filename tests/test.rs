@@ -60,7 +60,7 @@ where
         v = Widget::new_random(&mut rng);
         assert!(tree.insert(k, v) != None);
         s += 1;
-        assert!(s == tree.size());
+        assert!(s == tree.len());
         map.insert(k, v);
         keys.push(k);
     }
@@ -78,20 +78,20 @@ where
         map.remove(k);
     }
 
-    assert!(tree.size() == 0);
+    assert!(tree.len() == 0);
     keys = vec![];
 
     for _ in 0..100 {
-        assert!(s == tree.size());
+        assert!(s == tree.len());
         let sample = rng.gen::<f64>();
         if sample < 0.33 {
-            let remaining_slots = MAX_SIZE - tree.size();
+            let remaining_slots = tree.capacity() - tree.len();
             if remaining_slots == 0 {
                 continue;
             }
             let num_samples = rng.gen_range(0, remaining_slots);
             for _ in 0..num_samples {
-                assert!(tree.size() < MAX_SIZE);
+                assert!(tree.len() < tree.capacity());
                 let k = rng.gen::<K>();
                 let v = Widget::new_random(&mut rng);
                 assert!(tree.insert(k, v) != None);
@@ -100,10 +100,10 @@ where
                 keys.push(k);
             }
         } else if sample < 0.66 {
-            if tree.size() < 2 {
+            if tree.len() < 2 {
                 continue;
             }
-            let num_samples = rng.gen_range(0, tree.size() / 2);
+            let num_samples = rng.gen_range(0, tree.len() / 2);
             for _ in 0..num_samples {
                 assert!(!keys.is_empty());
                 let j = rng.gen_range(0, keys.len());
@@ -115,10 +115,10 @@ where
                 s -= 1;
             }
         } else {
-            if tree.size() == 0 {
+            if tree.len() == 0 {
                 continue;
             }
-            let num_samples = rng.gen_range(0, tree.size());
+            let num_samples = rng.gen_range(0, tree.len());
             for _ in 0..num_samples {
                 assert!(!keys.is_empty());
                 let j = rng.gen_range(0, keys.len());
@@ -167,7 +167,7 @@ where
             assert!(*v1 == *v2);
         }
     }
-    println!("{} Size: {}", std::any::type_name::<T>(), tree.size(),);
+    println!("{} Size: {}", std::any::type_name::<T>(), tree.len(),);
 }
 
 #[tokio::test(flavor = "multi_thread")]

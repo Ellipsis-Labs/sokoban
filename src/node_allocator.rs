@@ -37,7 +37,10 @@ pub trait NodeAllocatorMap<K, V> {
     fn contains(&self, key: &K) -> bool;
     fn get(&self, key: &K) -> Option<&V>;
     fn get_mut(&mut self, key: &K) -> Option<&mut V>;
+    #[deprecated]
     fn size(&self) -> usize;
+    fn len(&self) -> usize;
+    fn capacity(&self) -> usize;
     fn iter(&self) -> Box<dyn DoubleEndedIterator<Item = (&K, &V)> + '_>;
     fn iter_mut(&mut self) -> Box<dyn DoubleEndedIterator<Item = (&K, &mut V)> + '_>;
 }

@@ -171,6 +171,14 @@ impl<
         self.allocator.size as usize
     }
 
+    fn len(&self) -> usize {
+        self.allocator.size as usize
+    }
+
+    fn capacity(&self) -> usize {
+        MAX_SIZE
+    }
+
     fn iter(&self) -> Box<dyn DoubleEndedIterator<Item = (&K, &V)> + '_> {
         Box::new(self._iter())
     }
@@ -245,7 +253,7 @@ impl<
                 curr_node = self.get_next(curr_node);
             }
         }
-        if self.size() >= MAX_SIZE {
+        if self.len() >= self.capacity() {
             return None;
         }
         let node_index = self.allocator.add_node(HashNode::new(key, value));
