@@ -29,7 +29,7 @@ pub trait FromSlice {
     fn new_from_slice(data: &mut [u8]) -> &mut Self;
 }
 
-/// This trait allows allows for templated functions on map data structures that use the NodeAllocator
+/// This trait provides an API for map-like data structures that use the NodeAllocator
 /// struct as the underlying container
 pub trait NodeAllocatorMap<K, V> {
     fn insert(&mut self, key: K, value: V) -> Option<u32>;
@@ -37,13 +37,18 @@ pub trait NodeAllocatorMap<K, V> {
     fn contains(&self, key: &K) -> bool;
     fn get(&self, key: &K) -> Option<&V>;
     fn get_mut(&mut self, key: &K) -> Option<&mut V>;
+    #[deprecated]
     fn size(&self) -> usize;
+    fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    fn capacity(&self) -> usize;
     fn iter(&self) -> Box<dyn DoubleEndedIterator<Item = (&K, &V)> + '_>;
     fn iter_mut(&mut self) -> Box<dyn DoubleEndedIterator<Item = (&K, &mut V)> + '_>;
 }
 
-/// This trait allows allows for templated functions on sorted map data structures that use the NodeAllocator
-/// struct as the underlying container
+/// This trait adds additional functions for sorted map data structures that use the NodeAllocator
 pub trait OrderedNodeAllocatorMap<K, V>: NodeAllocatorMap<K, V> {
     fn get_min_index(&mut self) -> u32;
     fn get_max_index(&mut self) -> u32;
@@ -134,15 +139,16 @@ pub struct NodeAllocator<
 > {
     /// Size of the allocator. The max value this can take is `MAX_SIZE`
     pub size: u64,
-    /// Furthest index of the allocator. When this value reaches `MAX_SIZE` this indicates taht all of the nodes
-    /// has been used at least once and new allocated indicies must be pulled from the free list.
+    /// Index that represents the "boundary" of the allocator. When this value reaches `MAX_SIZE`
+    /// this indicates that all of the nodes has been used at least once and all new allocated
+    /// indicies must be pulled from the free list.
     bump_index: u32,
-    /// Buffer index of the first element in the free list. The free list is a linked list of nodes that
-    /// unallocated. The free list operates like a stack. When nodes are removed from the allocator,
-    /// that node becomes the new free list head. When new nodes are added, the index is pull from the
-    /// `free_list_head`
+    /// Buffer index of the first element in the free list. The free list is a singly-linked list
+    /// of unallocated nodes. The free list operates like a stack. When a node is removed from the
+    /// allocator, the removed node becomes the new free list head. When new nodes are added,
+    /// the new index to allocated is pulled from the `free_list_head`
     free_list_head: u32,
-    /// Nodes containing data, with `NUM_REGISTERS` registers that can store arbitrary data  
+    /// Nodes containing data, with `NUM_REGISTERS` registers that store arbitrary data  
     pub nodes: [Node<T, NUM_REGISTERS>; MAX_SIZE],
 }
 

@@ -171,6 +171,14 @@ impl<
         self.allocator.size as usize
     }
 
+    fn len(&self) -> usize {
+        self.allocator.size as usize
+    }
+
+    fn capacity(&self) -> usize {
+        MAX_SIZE
+    }
+
     fn iter(&self) -> Box<dyn DoubleEndedIterator<Item = (&K, &V)> + '_> {
         Box::new(self._iter())
     }
@@ -275,7 +283,7 @@ impl<
             return Some(self.root as u32);
         }
 
-        let mut path: Vec<Ancestor> = Vec::with_capacity((self.size() as f64).log2() as usize);
+        let mut path: Vec<Ancestor> = Vec::with_capacity((self.len() as f64).log2() as usize);
         path.push((None, None, reference_node));
 
         loop {
@@ -294,7 +302,7 @@ impl<
             };
 
             if reference_node == SENTINEL {
-                if self.size() >= MAX_SIZE {
+                if self.len() >= self.capacity() {
                     return None;
                 }
                 reference_node = self.allocator.add_node(new_node);
@@ -316,7 +324,7 @@ impl<
             return None;
         }
 
-        let mut path: Vec<Ancestor> = Vec::with_capacity((self.size() as f64).log2() as usize);
+        let mut path: Vec<Ancestor> = Vec::with_capacity((self.len() as f64).log2() as usize);
         path.push((None, None, node_index));
 
         while node_index != SENTINEL {
@@ -349,7 +357,7 @@ impl<
             let mut leftmost = right;
             let mut leftmost_parent = SENTINEL;
             // path to the leftmost descendant
-            let mut inner_path = Vec::with_capacity((self.size() as f64).log2() as usize);
+            let mut inner_path = Vec::with_capacity((self.len() as f64).log2() as usize);
 
             while self.get_field(leftmost, Field::Left) != SENTINEL {
                 leftmost_parent = leftmost;
@@ -644,10 +652,10 @@ pub struct AVLTreeIterator<
     V: Default + Copy + Clone + Pod + Zeroable,
     const MAX_SIZE: usize,
 > {
-    pub tree: &'a AVLTree<K, V, MAX_SIZE>,
-    pub stack: Vec<u32>,
-    pub rev_stack: Vec<u32>,
-    pub node: u32,
+    tree: &'a AVLTree<K, V, MAX_SIZE>,
+    stack: Vec<u32>,
+    rev_stack: Vec<u32>,
+    node: u32,
 }
 
 impl<
@@ -704,10 +712,10 @@ pub struct AVLTreeIteratorMut<
     V: Default + Copy + Clone + Pod + Zeroable,
     const MAX_SIZE: usize,
 > {
-    pub tree: &'a mut AVLTree<K, V, MAX_SIZE>,
-    pub stack: Vec<u32>,
-    pub rev_stack: Vec<u32>,
-    pub node: u32,
+    tree: &'a mut AVLTree<K, V, MAX_SIZE>,
+    stack: Vec<u32>,
+    rev_stack: Vec<u32>,
+    node: u32,
 }
 
 impl<

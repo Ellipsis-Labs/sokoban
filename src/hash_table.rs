@@ -50,7 +50,7 @@ pub struct HashTable<
     const MAX_SIZE: usize,
 > {
     pub buckets: [u32; NUM_BUCKETS],
-    pub allocator: NodeAllocator<HashNode<K, V>, MAX_SIZE, 2>,
+    pub allocator: NodeAllocator<HashNode<K, V>, MAX_SIZE, 4>,
 }
 
 unsafe impl<
@@ -90,7 +90,7 @@ impl<
         Self::assert_proper_alignment();
         HashTable {
             buckets: [SENTINEL; NUM_BUCKETS],
-            allocator: NodeAllocator::<HashNode<K, V>, MAX_SIZE, 2>::default(),
+            allocator: NodeAllocator::<HashNode<K, V>, MAX_SIZE, 4>::default(),
         }
     }
 }
@@ -171,6 +171,14 @@ impl<
         self.allocator.size as usize
     }
 
+    fn len(&self) -> usize {
+        self.allocator.size as usize
+    }
+
+    fn capacity(&self) -> usize {
+        MAX_SIZE
+    }
+
     fn iter(&self) -> Box<dyn DoubleEndedIterator<Item = (&K, &V)> + '_> {
         Box::new(self._iter())
     }
@@ -245,7 +253,7 @@ impl<
                 curr_node = self.get_next(curr_node);
             }
         }
-        if self.size() >= MAX_SIZE {
+        if self.len() >= self.capacity() {
             return None;
         }
         let node_index = self.allocator.add_node(HashNode::new(key, value));
@@ -381,9 +389,9 @@ pub struct HashTableIterator<
     const NUM_BUCKETS: usize,
     const MAX_SIZE: usize,
 > {
-    pub ht: &'a HashTable<K, V, NUM_BUCKETS, MAX_SIZE>,
-    pub bucket: usize,
-    pub node: u32,
+    ht: &'a HashTable<K, V, NUM_BUCKETS, MAX_SIZE>,
+    bucket: usize,
+    node: u32,
 }
 
 impl<
@@ -435,9 +443,9 @@ pub struct HashTableIteratorMut<
     const NUM_BUCKETS: usize,
     const MAX_SIZE: usize,
 > {
-    pub ht: &'a mut HashTable<K, V, NUM_BUCKETS, MAX_SIZE>,
-    pub bucket: usize,
-    pub node: u32,
+    ht: &'a mut HashTable<K, V, NUM_BUCKETS, MAX_SIZE>,
+    bucket: usize,
+    node: u32,
 }
 
 impl<
