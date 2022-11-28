@@ -1,9 +1,7 @@
 use bytemuck::{Pod, Zeroable};
-use colored::Colorize;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use std::{
-    collections::BTreeMap,
     fmt::{Debug, Display},
     ops::{Index, IndexMut},
 };
@@ -98,7 +96,7 @@ impl<
 }
 
 impl<
-        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > Default for RedBlackTree<K, V, MAX_SIZE>
@@ -114,7 +112,7 @@ impl<
 }
 
 impl<
-        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > FromSlice for RedBlackTree<K, V, MAX_SIZE>
@@ -128,7 +126,7 @@ impl<
 }
 
 impl<
-        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > NodeAllocatorMap<K, V> for RedBlackTree<K, V, MAX_SIZE>
@@ -200,7 +198,7 @@ impl<
 }
 
 impl<
-        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > OrderedNodeAllocatorMap<K, V> for RedBlackTree<K, V, MAX_SIZE>
@@ -235,7 +233,7 @@ impl<
 }
 
 impl<
-        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > RedBlackTree<K, V, MAX_SIZE>
@@ -244,13 +242,11 @@ impl<
     where
         K: Debug + Display,
     {
+        if self.size() == 0 {
+            return;
+        }
         let mut s = String::new();
         let mut stack = vec![(self.root as u32, "".to_string(), "".to_string())];
-        let key_to_index = self
-            .iter()
-            .enumerate()
-            .map(|(i, (k, _))| (k, i))
-            .collect::<BTreeMap<_, _>>();
 
         while !stack.is_empty() {
             let (node, mut padding, pointer) = stack.pop().unwrap();
@@ -261,12 +257,10 @@ impl<
             s.push_str(&padding);
             s.push_str(&pointer);
             if self.is_red(node) {
-                s.push_str(&format!(
-                    "\u{001b}[31m{:?} ({})\u{001b}[0m",
-                    key, key_to_index[&key]
-                ));
+                // Prints red nodes in red
+                s.push_str(&format!("\u{001b}[31m{:?}\u{001b}[0m", key));
             } else {
-                s.push_str(&format!("{:?} ({})", key, key_to_index[&key]));
+                s.push_str(&format!("{:?}", key));
             }
             s.push_str("\n");
             padding.push_str("│  ");
@@ -292,7 +286,10 @@ impl<
     }
 
     pub fn is_valid_red_black_tree(&self) -> bool {
-        // The root is black
+        if self.size() == 0 {
+            return true;
+        }
+        // The root must be black
         if self.is_red(self.root as u32) {
             return false;
         }
@@ -319,12 +316,7 @@ impl<
             }
         }
         // All paths from root to leaf must have the same number of black nodes
-        let branch_len_equal = black_count.iter().all(|&x| x == black_count[0]);
-        if !branch_len_equal {
-            println!("Branch lengths not equal: {:?}", black_count);
-            return false;
-        }
-        true
+        black_count.iter().all(|&x| x == black_count[0])
     }
 
     pub fn new() -> Self {
@@ -536,9 +528,6 @@ impl<
     }
 
     fn fix_remove(&mut self, mut node_index: u32, parent_dir: Option<(u32, u32)>) {
-        if node_index == SENTINEL {
-            return;
-        }
         while node_index != self.root as u32 && self.is_black(node_index) {
             let (parent, dir) = if node_index == SENTINEL {
                 parent_dir.unwrap()
@@ -591,7 +580,19 @@ impl<
             } else {
                 // We have found the node to remove
                 let mut is_black = self.is_black(curr_node_index);
-                let (pivot_node_index, parent_dir) = if left == SENTINEL {
+                let (pivot_node_index, parent_dir) = if self.is_leaf(curr_node_index) {
+                    if curr_node_index != self.root as u32 {
+                        let parent = self.get_parent(curr_node_index);
+                        let dir = self.child_dir(parent, curr_node_index);
+                        // Remove pointer to the removed leaf node
+                        self.connect(parent, SENTINEL, dir);
+                        (SENTINEL, Some((parent, dir)))
+                    } else {
+                        // Don't run fix_remove when there is only 1 node remaining
+                        is_black = false;
+                        (SENTINEL, None)
+                    }
+                } else if left == SENTINEL {
                     self.transplant(curr_node_index, right);
                     (right, None)
                 } else if right == SENTINEL {
@@ -601,26 +602,29 @@ impl<
                     // Find the largest node in the left subtree
                     let mut parent_dir = None;
                     let max_left = self.find_max(left);
+                    let max_left_parent = self.get_parent(max_left);
                     let max_left_child = self.get_left(max_left);
                     is_black = self.is_black(max_left);
+
                     // If max_left is not equal to root of the left subtree, then
                     // replace the root of the left subtree with max_left and replace
                     // max_left with max_left's child
                     if self.get_parent(max_left) != curr_node_index {
                         self.transplant(max_left, max_left_child);
-                        self.connect(
-                            max_left,
-                            self.get_left(curr_node_index),
-                            Field::Right as u32,
-                        );
+                        // We perform this operation in the conditional because we don't
+                        // want to form a cycle
+                        self.connect(max_left, self.get_left(curr_node_index), Field::Left as u32);
                         if max_left_child == SENTINEL {
-                            parent_dir = Some((self.get_parent(max_left), Field::Right as u32));
+                            parent_dir = Some((max_left_parent, Field::Right as u32));
                         }
                     } else {
+                        // The only time this can be true is when the left subtree is
+                        // a single node
                         if max_left_child == SENTINEL {
                             parent_dir = Some((max_left, Field::Left as u32));
                         }
                     }
+
                     // Complete the transplant of max_left
                     self.transplant(curr_node_index, max_left);
                     self.connect(
@@ -628,6 +632,7 @@ impl<
                         self.get_right(curr_node_index),
                         Field::Right as u32,
                     );
+
                     self.color_node(max_left, self.get_color(curr_node_index));
 
                     (max_left_child, parent_dir)
@@ -722,7 +727,7 @@ impl<
 
 impl<
         'a,
-        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > IntoIterator for &'a RedBlackTree<K, V, MAX_SIZE>
@@ -736,7 +741,7 @@ impl<
 
 impl<
         'a,
-        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > IntoIterator for &'a mut RedBlackTree<K, V, MAX_SIZE>
@@ -750,7 +755,7 @@ impl<
 
 pub struct RedBlackTreeIterator<
     'a,
-    K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
     const MAX_SIZE: usize,
 > {
@@ -762,7 +767,7 @@ pub struct RedBlackTreeIterator<
 
 impl<
         'a,
-        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > Iterator for RedBlackTreeIterator<'a, K, V, MAX_SIZE>
@@ -787,7 +792,7 @@ impl<
 
 impl<
         'a,
-        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > DoubleEndedIterator for RedBlackTreeIterator<'a, K, V, MAX_SIZE>
@@ -810,7 +815,7 @@ impl<
 
 pub struct RedBlackTreeIteratorMut<
     'a,
-    K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
     const MAX_SIZE: usize,
 > {
@@ -822,7 +827,7 @@ pub struct RedBlackTreeIteratorMut<
 
 impl<
         'a,
-        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > Iterator for RedBlackTreeIteratorMut<'a, K, V, MAX_SIZE>
@@ -857,7 +862,7 @@ impl<
 
 impl<
         'a,
-        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > DoubleEndedIterator for RedBlackTreeIteratorMut<'a, K, V, MAX_SIZE>
@@ -889,7 +894,7 @@ impl<
 }
 
 impl<
-        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > Index<&K> for RedBlackTree<K, V, MAX_SIZE>
@@ -902,7 +907,7 @@ impl<
 }
 
 impl<
-        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
     > IndexMut<&K> for RedBlackTree<K, V, MAX_SIZE>
@@ -1169,14 +1174,14 @@ fn test_right_insert_with_red_left_child_parent_and_black_uncle() {
 
 #[test]
 fn test_delete_multiple_random() {
-    use std::collections::hash_map::DefaultHasher;
+    use std::collections::{hash_map::DefaultHasher, BTreeMap};
     use std::hash::{Hash, Hasher};
-    type RBT = RedBlackTree<u64, u64, 32>;
+    type RBT = RedBlackTree<u64, u64, 1024>;
     let mut buf = vec![0u8; std::mem::size_of::<RBT>()];
     let sample_tree = RBT::new_from_slice(buf.as_mut_slice());
     let mut dummy_keys = vec![];
     // Fill up tree
-    for k in 0..32 {
+    for k in 0..1024 {
         let mut hasher = DefaultHasher::new();
         (k as u64).hash(&mut hasher);
         let key = hasher.finish();
@@ -1196,7 +1201,6 @@ fn test_delete_multiple_random() {
 
     for k in dummy_keys.iter() {
         let i = key_to_index[k];
-        println!("Inserting {} -> {}", k, i);
         index_tree.insert(i, 0).unwrap();
         keys.push(i);
         assert!(index_tree.is_valid_red_black_tree());
@@ -1206,12 +1210,8 @@ fn test_delete_multiple_random() {
     index_tree.pretty_print();
 
     for i in keys.iter() {
-        println!("Removing {}", i);
         index_tree.remove(&i).unwrap();
         index_tree.pretty_print();
         assert!(index_tree.is_valid_red_black_tree());
-        if *i == 6 {
-            panic!("Stop here");
-        }
     }
 }

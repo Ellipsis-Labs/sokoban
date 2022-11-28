@@ -25,7 +25,6 @@ bytemuck = "1.11.0"
 thiserror = "1.0.30"
 num-derive = "0.3.3"
 num-traits = "0.2.15"
-colored = "2.0.0"
 
 [dev-dependencies]
 rand_distr = "0.4.3"
