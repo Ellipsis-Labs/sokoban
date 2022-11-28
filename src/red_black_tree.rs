@@ -1189,6 +1189,31 @@ fn test_right_insert_with_red_left_child_parent_and_black_uncle() {
     assert!(tree.is_leaf(parent) && tree.is_leaf(grandparent));
 }
 
+/// Test a power of 2 minus 1
+#[test]
+fn test_delete_multiple_random_1023() {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    type Rbt = RedBlackTree<u64, u64, 1023>;
+    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
+    let mut keys = vec![];
+    // Fill up tree
+    for k in 0..1023 {
+        let mut hasher = DefaultHasher::new();
+        (k as u64).hash(&mut hasher);
+        let key = hasher.finish();
+        tree.insert(key, 0).unwrap();
+        keys.push(key);
+        assert!(tree.is_valid_red_black_tree());
+    }
+
+    for i in keys.iter() {
+        tree.remove(i).unwrap();
+        assert!(tree.is_valid_red_black_tree());
+    }
+}
+
 #[test]
 fn test_delete_multiple_random_1024() {
     use std::collections::hash_map::DefaultHasher;
@@ -1249,14 +1274,55 @@ fn test_delete_multiple_random_2048() {
     assert!(index_tree.is_valid_red_black_tree());
     for i in index_keys.iter() {
         println!("Removing {}", i);
-        let prev = index_tree.clone();
         index_tree.remove(i).unwrap();
         if !index_tree.is_valid_red_black_tree() {
-            prev.pretty_print();
-            println!();
-            index_tree.pretty_print();
-            println!("Removing {} resulted in an invalid tree", i);
             panic!("Tree is not valid");
         }
+    }
+}
+
+#[test]
+fn test_delete_multiple_random_512() {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    type Rbt = RedBlackTree<u64, u64, 512>;
+    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
+    let mut keys = vec![];
+    // Fill up tree
+    for k in 0..512 {
+        let mut hasher = DefaultHasher::new();
+        (k as u64).hash(&mut hasher);
+        let key = hasher.finish();
+        tree.insert(key, 0).unwrap();
+        keys.push(key);
+        assert!(tree.is_valid_red_black_tree());
+    }
+    for i in keys.iter() {
+        tree.remove(i).unwrap();
+        assert!(tree.is_valid_red_black_tree());
+    }
+}
+
+#[test]
+fn test_delete_multiple_random_4098() {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    type Rbt = RedBlackTree<u64, u64, 4098>;
+    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
+    let mut keys = vec![];
+    // Fill up tree
+    for k in 0..4098 {
+        let mut hasher = DefaultHasher::new();
+        (k as u64).hash(&mut hasher);
+        let key = hasher.finish();
+        tree.insert(key, 0).unwrap();
+        keys.push(key);
+        assert!(tree.is_valid_red_black_tree());
+    }
+    for i in keys.iter() {
+        tree.remove(i).unwrap();
+        assert!(tree.is_valid_red_black_tree());
     }
 }
