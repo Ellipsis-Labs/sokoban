@@ -45,7 +45,7 @@ Enter Sokoban: A library of data structures designed to simplify this exact prob
 
 Almost all data structures can be represented by some sort of connected graph of nodes and edges. The `node-allocator` module implements a raw node allocation data structure for contiguous buffers. Each entry in the buffer must contain objects of the same underlying type. Each entry will also have a fixed number of _registers_ that contain metadata relating to the current node. These registers will usually be interpreted as graph edges.
 
-```
+```rust
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct NodeAllocator<
@@ -74,7 +74,7 @@ pub struct Node<T: Copy + Clone + Pod + Zeroable + Default, const NUM_REGISTERS:
 
 The templated `NodeAllocator` object is flexible primitive data structure for implementing more complex types. Here's how one might use the `NodeAllocator` to implement a doubly-linked list:
 
-```
+```rust
 // Register aliases
 pub const PREV: u32 = 0;
 pub const NEXT: u32 = 1;
