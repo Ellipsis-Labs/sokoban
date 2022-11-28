@@ -40,6 +40,9 @@ pub trait NodeAllocatorMap<K, V> {
     #[deprecated]
     fn size(&self) -> usize;
     fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     fn capacity(&self) -> usize;
     fn iter(&self) -> Box<dyn DoubleEndedIterator<Item = (&K, &V)> + '_>;
     fn iter_mut(&mut self) -> Box<dyn DoubleEndedIterator<Item = (&K, &mut V)> + '_>;

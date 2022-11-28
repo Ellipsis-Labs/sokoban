@@ -58,7 +58,7 @@ where
     for _ in 0..(MAX_SIZE) {
         let k = rng.gen::<K>();
         v = Widget::new_random(&mut rng);
-        assert!(tree.insert(k, v) != None);
+        assert!(tree.insert(k, v).is_some());
         s += 1;
         assert!(s == tree.len());
         map.insert(k, v);
@@ -67,13 +67,13 @@ where
 
     let k = rng.gen();
     let v = Widget::new_random(&mut rng);
-    assert!(tree.insert(k, v) == None);
+    assert!(tree.insert(k, v).is_none());
 
     let mut rand_keys = keys.clone();
     rand_keys.shuffle(&mut rng);
 
     for k in rand_keys.iter() {
-        assert!(tree.remove(k) != None);
+        assert!(tree.remove(k).is_some());
         s -= 1;
         map.remove(k);
     }
@@ -94,7 +94,7 @@ where
                 assert!(tree.len() < tree.capacity());
                 let k = rng.gen::<K>();
                 let v = Widget::new_random(&mut rng);
-                assert!(tree.insert(k, v) != None);
+                assert!(tree.insert(k, v).is_some());
                 s += 1;
                 map.insert(k, v);
                 keys.push(k);
@@ -110,7 +110,7 @@ where
                 let key = keys[j];
                 keys.swap_remove(j);
                 // assert!(rbt[&key] == map[&key]);
-                assert!(tree.remove(&key) != None);
+                assert!(tree.remove(&key).is_some());
                 map.remove(&key);
                 s -= 1;
             }
@@ -124,7 +124,7 @@ where
                 let j = rng.gen_range(0, keys.len());
                 let key = keys[j];
                 let v = Widget::new_random(&mut rng);
-                assert!(tree.insert(key, v) != None);
+                *tree.get_mut(&key).unwrap() = v;
                 map.insert(key, v);
             }
         }

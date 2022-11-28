@@ -1,41 +1,49 @@
 # Sokoban
+
 Compact, efficient data structures in contiguous byte arrays.
 
 ## DISCLAIMER
+
 This is unaudited code, and still very rough around the edges. Proceed with caution before using any of these data structures in a production system.
 
 ### Benchmarks
+
 Based on simple benchmarks, the naive performance of Sokoban data structures are on par with, but slightly slower than, the Rust Standard Library. Critbit is the exception for small sizes, but this should not be surprising as the insertion is amortized O(1) with very few reorgs of the data.
 
 ```
-test bench_tests::bench_sokoban_avl_tree_insert_1000_u128        ... bench:     197,978 ns/iter (+/- 14,744)
-test bench_tests::bench_sokoban_avl_tree_insert_20000_u128       ... bench:   3,337,856 ns/iter (+/- 394,301)
-test bench_tests::bench_sokoban_avl_tree_remove_u128             ... bench:     585,244 ns/iter (+/- 58,473)
-test bench_tests::bench_sokoban_critbit_insert_1000_u128         ... bench:      12,067 ns/iter (+/- 1,158)
-test bench_tests::bench_sokoban_critbit_insert_20000_u128        ... bench:     256,514 ns/iter (+/- 18,923)
-test bench_tests::bench_sokoban_critbit_remove_1000_u128         ... bench:     116,700 ns/iter (+/- 7,000)
-test bench_tests::bench_sokoban_hash_map_insert_1000_u128        ... bench:      32,192 ns/iter (+/- 2,592)
-test bench_tests::bench_sokoban_hash_map_insert_20000_u128       ... bench:   1,134,509 ns/iter (+/- 119,435)
-test bench_tests::bench_sokoban_hash_map_remove_1000_u128        ... bench:      48,177 ns/iter (+/- 6,349)
-test bench_tests::bench_sokoban_red_black_tree_insert_1000_u128  ... bench:      45,940 ns/iter (+/- 3,609)
-test bench_tests::bench_sokoban_red_black_tree_insert_20000_u128 ... bench:   1,716,138 ns/iter (+/- 157,458)
-test bench_tests::bench_sokoban_red_black_tree_remove_1000_u128  ... bench:     118,634 ns/iter (+/- 9,840)
-test bench_tests::bench_std_btree_map_insert_1000_u128           ... bench:      42,541 ns/iter (+/- 3,257)
-test bench_tests::bench_std_btree_map_insert_20000_u128          ... bench:   1,095,174 ns/iter (+/- 140,250)
-test bench_tests::bench_std_btree_map_remove_1000_u128           ... bench:     156,978 ns/iter (+/- 57,306)
-test bench_tests::bench_std_hash_map_insert_1000_u128            ... bench:      23,454 ns/iter (+/- 2,287)
-test bench_tests::bench_std_hash_map_insert_20000_u128           ... bench:     565,162 ns/iter (+/- 72,156)
-test bench_tests::bench_std_hash_map_remove_1000_u128            ... bench:      44,043 ns/iter (+/- 2,788)
+test bench_tests::bench_sokoban_avl_tree_insert_1000_u128             ... bench:     134,301 ns/iter (+/- 4,033)
+test bench_tests::bench_sokoban_avl_tree_insert_1000_u128_stack       ... bench:     134,135 ns/iter (+/- 3,620)
+test bench_tests::bench_sokoban_avl_tree_insert_20000_u128            ... bench:   2,744,853 ns/iter (+/- 158,364)
+test bench_tests::bench_sokoban_avl_tree_remove_u128                  ... bench:     355,992 ns/iter (+/- 22,770)
+test bench_tests::bench_sokoban_critbit_insert_1000_u128              ... bench:      90,306 ns/iter (+/- 590)
+test bench_tests::bench_sokoban_critbit_insert_1000_u128_stack        ... bench:      76,819 ns/iter (+/- 661)
+test bench_tests::bench_sokoban_critbit_insert_20000_u128             ... bench:   2,839,050 ns/iter (+/- 207,241)
+test bench_tests::bench_sokoban_critbit_remove_1000_u128              ... bench:      97,366 ns/iter (+/- 6,124)
+test bench_tests::bench_sokoban_hash_map_insert_1000_u128             ... bench:      46,828 ns/iter (+/- 1,928)
+test bench_tests::bench_sokoban_hash_map_insert_1000_u128_stack       ... bench:      46,686 ns/iter (+/- 1,691)
+test bench_tests::bench_sokoban_hash_map_insert_20000_u128            ... bench:   1,492,742 ns/iter (+/- 43,362)
+test bench_tests::bench_sokoban_hash_map_remove_1000_u128             ... bench:      59,896 ns/iter (+/- 1,782)
+test bench_tests::bench_sokoban_red_black_tree_insert_1000_u128       ... bench:      69,574 ns/iter (+/- 8,581)
+test bench_tests::bench_sokoban_red_black_tree_insert_1000_u128_stack ... bench:      66,057 ns/iter (+/- 8,853)
+test bench_tests::bench_sokoban_red_black_tree_insert_20000_u128      ... bench:   1,905,406 ns/iter (+/- 25,546)
+test bench_tests::bench_sokoban_red_black_tree_remove_1000_u128       ... bench:     128,889 ns/iter (+/- 13,508)
+test bench_tests::bench_std_btree_map_insert_1000_u128                ... bench:      51,353 ns/iter (+/- 10,240)
+test bench_tests::bench_std_btree_map_insert_20000_u128               ... bench:   1,535,224 ns/iter (+/- 21,645)
+test bench_tests::bench_std_btree_map_remove_1000_u128                ... bench:     131,879 ns/iter (+/- 19,325)
+test bench_tests::bench_std_hash_map_insert_1000_u128                 ... bench:      38,775 ns/iter (+/- 237)
+test bench_tests::bench_std_hash_map_insert_20000_u128                ... bench:     797,904 ns/iter (+/- 10,719)
+test bench_tests::bench_std_hash_map_remove_1000_u128                 ... bench:      57,452 ns/iter (+/- 364)
 ```
 
-
 ### Why compact data structures?
+
 For most applications, there is no reason to look past the Rust standard library for data structures. However, when the application has limited or expensive memory and is bottlenecked by performance, programmers will often need to design custom solutions to address those constraints. These types of constraints come up quite frequently in high frequency trading, embedded systems, and blockchain development.
 
 Enter Sokoban: A library of data structures designed to simplify this exact problem.
 
 ### Generic Node Allocator
-Almost all data structures can be represented by some sort of connected graph of nodes and edges. The `node-allocator` module implements a raw node allocation data structure for contiguous buffers. Each entry in the buffer must contain objects of the same underlying type. Each entry will also have a fixed number of *registers* that contain metadata relating to the current node. These registers will usually be interpreted as graph edges.
+
+Almost all data structures can be represented by some sort of connected graph of nodes and edges. The `node-allocator` module implements a raw node allocation data structure for contiguous buffers. Each entry in the buffer must contain objects of the same underlying type. Each entry will also have a fixed number of _registers_ that contain metadata relating to the current node. These registers will usually be interpreted as graph edges.
 
 ```
 #[repr(C)]

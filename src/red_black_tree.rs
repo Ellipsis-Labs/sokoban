@@ -2,6 +2,7 @@ use bytemuck::{Pod, Zeroable};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use std::{
+    cmp::Ordering,
     fmt::Debug,
     ops::{Index, IndexMut},
 };
@@ -144,44 +145,44 @@ impl<
     }
 
     fn get(&self, key: &K) -> Option<&V> {
-        let mut reference_node = self.root;
-        if reference_node == SENTINEL {
+        let mut node_index = self.root;
+        if node_index == SENTINEL {
             return None;
         }
         loop {
-            let ref_value = self.allocator.get(reference_node).get_value().key;
-            let target = if *key < ref_value {
-                self.get_left(reference_node)
-            } else if *key > ref_value {
-                self.get_right(reference_node)
-            } else {
-                return Some(&self.get_node(reference_node).value);
+            let curr_key = self.get_node(node_index).key;
+            let target = match key.cmp(&curr_key) {
+                Ordering::Less => self.get_left(node_index),
+                Ordering::Greater => self.get_right(node_index),
+                Ordering::Equal => {
+                    return Some(&self.get_node(node_index).value);
+                }
             };
             if target == SENTINEL {
                 return None;
             }
-            reference_node = target
+            node_index = target
         }
     }
 
     fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        let mut reference_node = self.root;
-        if reference_node == SENTINEL {
+        let mut node_index = self.root;
+        if node_index == SENTINEL {
             return None;
         }
         loop {
-            let ref_value = self.allocator.get(reference_node).get_value().key;
-            let target = if *key < ref_value {
-                self.get_left(reference_node)
-            } else if *key > ref_value {
-                self.get_right(reference_node)
-            } else {
-                return Some(&mut self.get_node_mut(reference_node).value);
+            let curr_key = self.get_node(node_index).key;
+            let target = match key.cmp(&curr_key) {
+                Ordering::Less => self.get_left(node_index),
+                Ordering::Greater => self.get_right(node_index),
+                Ordering::Equal => {
+                    return Some(&mut self.get_node_mut(node_index).value);
+                }
             };
             if target == SENTINEL {
                 return None;
             }
-            reference_node = target
+            node_index = target
         }
     }
 
@@ -268,7 +269,7 @@ impl<
             } else {
                 s.push_str(&format!("{:?}", key));
             }
-            s.push_str("\n");
+            s.push('\n');
             padding.push_str("│  ");
 
             let right_pointer = "└──".to_string();
@@ -480,14 +481,14 @@ impl<
             return Some(node_index);
         }
         loop {
-            let ref_value = self.get_node(reference_node).key;
-            let (target, dir) = if key < ref_value {
-                (self.get_left(reference_node), Field::Left as u32)
-            } else if key > ref_value {
-                (self.get_right(reference_node), Field::Right as u32)
-            } else {
-                self.get_node_mut(reference_node).value = value;
-                return Some(reference_node);
+            let curr_key = self.get_node(reference_node).key;
+            let (target, dir) = match key.cmp(&curr_key) {
+                Ordering::Less => (self.get_left(reference_node), Field::Left as u32),
+                Ordering::Greater => (self.get_right(reference_node), Field::Right as u32),
+                Ordering::Equal => {
+                    self.get_node_mut(reference_node).value = value;
+                    return Some(reference_node);
+                }
             };
             if target == SENTINEL {
                 if self.len() >= self.capacity() {
@@ -544,15 +545,17 @@ impl<
             return None;
         }
         loop {
-            let curr_key = self.allocator.get(curr_node_index).get_value().key;
-            let curr_value = self.allocator.get(curr_node_index).get_value().value;
-            let target = if *key < curr_key {
-                self.get_left(curr_node_index)
-            } else if *key > curr_key {
-                self.get_right(curr_node_index)
-            } else {
-                self._remove_tree_node(curr_node_index);
-                return Some(curr_value);
+            let RBNode {
+                key: curr_key,
+                value: curr_value,
+            } = *self.allocator.get(curr_node_index).get_value();
+            let target = match key.cmp(&curr_key) {
+                Ordering::Less => self.get_left(curr_node_index),
+                Ordering::Greater => self.get_right(curr_node_index),
+                Ordering::Equal => {
+                    self._remove_tree_node(curr_node_index);
+                    return Some(curr_value);
+                }
             };
             if target == SENTINEL {
                 return None;
@@ -687,12 +690,10 @@ impl<
         }
         loop {
             let ref_value = self.allocator.get(reference_node).get_value().key;
-            let target = if *key < ref_value {
-                self.get_left(reference_node)
-            } else if *key > ref_value {
-                self.get_right(reference_node)
-            } else {
-                return reference_node;
+            let target = match key.cmp(&ref_value) {
+                Ordering::Less => self.get_left(reference_node),
+                Ordering::Greater => self.get_right(reference_node),
+                Ordering::Equal => reference_node,
             };
             if target == SENTINEL {
                 return SENTINEL;
@@ -933,9 +934,9 @@ impl<
 /// This test addresses the case where a node's parent and uncle are both red.
 /// This is resolved by coloring the parent and uncle black and the grandparent red.
 fn test_insert_with_red_parent_and_uncle() {
-    type RBT = RedBlackTree<u64, u64, 1024>;
-    let mut buf = vec![0u8; std::mem::size_of::<RBT>()];
-    let tree = RBT::new_from_slice(buf.as_mut_slice());
+    type Rbt = RedBlackTree<u64, u64, 1024>;
+    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
     let addrs = vec![
         tree.insert(61, 0).unwrap(),
         tree.insert(52, 0).unwrap(),
@@ -982,9 +983,9 @@ fn test_insert_with_red_parent_and_uncle() {
 /// We resolve this by rotating the grandparent left and then
 /// fixing the colors.
 fn test_right_insert_with_red_right_child_parent_and_black_uncle() {
-    type RBT = RedBlackTree<u64, u64, 1024>;
-    let mut buf = vec![0u8; std::mem::size_of::<RBT>()];
-    let tree = RBT::new_from_slice(buf.as_mut_slice());
+    type Rbt = RedBlackTree<u64, u64, 1024>;
+    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
     let addrs = vec![
         tree.insert(61, 0).unwrap(),
         tree.insert(52, 0).unwrap(),
@@ -1035,9 +1036,9 @@ fn test_right_insert_with_red_right_child_parent_and_black_uncle() {
 /// We resolve this by rotating the parent right then applying the same
 /// algorithm as the previous test.
 fn test_left_insert_with_red_right_child_parent_and_black_uncle() {
-    type RBT = RedBlackTree<u64, u64, 1024>;
-    let mut buf = vec![0u8; std::mem::size_of::<RBT>()];
-    let tree = RBT::new_from_slice(buf.as_mut_slice());
+    type Rbt = RedBlackTree<u64, u64, 1024>;
+    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
     let addrs = vec![
         tree.insert(61, 0).unwrap(),
         tree.insert(52, 0).unwrap(),
@@ -1088,9 +1089,9 @@ fn test_left_insert_with_red_right_child_parent_and_black_uncle() {
 /// We resolve this by rotating the grandparent right and then
 /// fixing the colors.
 fn test_left_insert_with_red_left_child_parent_and_black_uncle() {
-    type RBT = RedBlackTree<u64, u64, 1024>;
-    let mut buf = vec![0u8; std::mem::size_of::<RBT>()];
-    let tree = RBT::new_from_slice(buf.as_mut_slice());
+    type Rbt = RedBlackTree<u64, u64, 1024>;
+    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
     let addrs = vec![
         tree.insert(61, 0).unwrap(),
         tree.insert(85, 0).unwrap(),
@@ -1141,9 +1142,9 @@ fn test_left_insert_with_red_left_child_parent_and_black_uncle() {
 /// We resolve this by rotating the parent left then applying the same
 /// algorithm as the previous test.
 fn test_right_insert_with_red_left_child_parent_and_black_uncle() {
-    type RBT = RedBlackTree<u64, u64, 1024>;
-    let mut buf = vec![0u8; std::mem::size_of::<RBT>()];
-    let tree = RBT::new_from_slice(buf.as_mut_slice());
+    type Rbt = RedBlackTree<u64, u64, 1024>;
+    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
     let addrs = vec![
         tree.insert(61, 0).unwrap(),
         tree.insert(85, 0).unwrap(),
@@ -1188,9 +1189,9 @@ fn test_right_insert_with_red_left_child_parent_and_black_uncle() {
 fn test_delete_multiple_random() {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-    type RBT = RedBlackTree<u64, u64, 1024>;
-    let mut buf = vec![0u8; std::mem::size_of::<RBT>()];
-    let tree = RBT::new_from_slice(buf.as_mut_slice());
+    type Rbt = RedBlackTree<u64, u64, 1024>;
+    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
     let mut keys = vec![];
     // Fill up tree
     for k in 0..1024 {
@@ -1203,7 +1204,7 @@ fn test_delete_multiple_random() {
     }
 
     for i in keys.iter() {
-        tree.remove(&i).unwrap();
+        tree.remove(i).unwrap();
         assert!(tree.is_valid_red_black_tree());
     }
 }
