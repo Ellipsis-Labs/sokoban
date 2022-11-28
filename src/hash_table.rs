@@ -50,7 +50,7 @@ pub struct HashTable<
     const MAX_SIZE: usize,
 > {
     pub buckets: [u32; NUM_BUCKETS],
-    pub allocator: NodeAllocator<HashNode<K, V>, MAX_SIZE, 2>,
+    pub allocator: NodeAllocator<HashNode<K, V>, MAX_SIZE, 4>,
 }
 
 unsafe impl<
@@ -90,7 +90,7 @@ impl<
         Self::assert_proper_alignment();
         HashTable {
             buckets: [SENTINEL; NUM_BUCKETS],
-            allocator: NodeAllocator::<HashNode<K, V>, MAX_SIZE, 2>::default(),
+            allocator: NodeAllocator::<HashNode<K, V>, MAX_SIZE, 4>::default(),
         }
     }
 }

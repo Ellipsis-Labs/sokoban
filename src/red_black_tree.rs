@@ -235,6 +235,23 @@ impl<
         const MAX_SIZE: usize,
     > RedBlackTree<K, V, MAX_SIZE>
 {
+    pub fn print_node(&self, node: u32)
+    where
+        K: std::fmt::Debug,
+        V: std::fmt::Debug,
+    {
+        println!("Node Index: {}", node);
+        println!("Left: {}", self.get_left(node));
+        println!("Right: {}", self.get_right(node));
+        println!("Parent: {}", self.get_parent(node));
+        println!(
+            "Color: {}",
+            if self.is_black(node) { "Black" } else { "Red" }
+        );
+        println!("Key: {:?}", self.get_node(node).key);
+        println!()
+    }
+
     fn assert_proper_alignment() {
         // TODO is this a sufficient coverage of the edge cases?
         assert!(std::mem::size_of::<V>() % std::mem::align_of::<K>() == 0);
@@ -377,7 +394,7 @@ impl<
                 node = grandparent;
             } else {
                 if self.child_dir(parent, node) == opposite(dir) {
-                    self.rotate_dir(node, dir);
+                    self.rotate_dir(parent, dir);
                     node = parent;
                 }
                 parent = self.get_parent(node);
@@ -417,6 +434,7 @@ impl<
                 self.color_red(node_index);
                 self.connect(reference_node, node_index, dir);
                 let grandparent = self.get_parent(reference_node);
+                // This is only false when the parent is the root
                 if grandparent != SENTINEL {
                     self.fix_insert(node_index);
                 }
@@ -484,11 +502,13 @@ impl<
                 let mut is_black = self.is_black(ref_node_index);
                 let (pivot_node_index, delete_node_index) = if left == SENTINEL {
                     self.transplant(ref_node_index, right);
+                    // After this step, the node to be deleted has no more childre
                     self.allocator
                         .clear_register(ref_node_index, Field::Right as u32);
                     (right, ref_node_index)
                 } else if right == SENTINEL {
                     self.transplant(ref_node_index, left);
+                    // After this step, the node to be deleted has no more childre
                     self.allocator
                         .clear_register(ref_node_index, Field::Left as u32);
                     (left, ref_node_index)
@@ -518,11 +538,16 @@ impl<
                         .clear_register(ref_node_index, Field::Right as u32);
                     (min_right_child, ref_node_index)
                 };
+                // The parent register and color register of the removed node are cleared
                 self.allocator
                     .clear_register(ref_node_index, Field::Parent as u32);
                 self.allocator.clear_register(delete_node_index, COLOR);
+                // The removed node is added to the free list
                 self.allocator.remove_node(delete_node_index);
-                if is_black && self.fix_remove(pivot_node_index) == None {
+                // This condition will short circuit if the removed node is red
+                // Otherwise, the fixup function will be called to restore the
+                // red-black tree properties
+                if is_black && self.fix_remove(pivot_node_index).is_none() {
                     return None;
                 }
                 return Some(ref_value);
@@ -535,6 +560,8 @@ impl<
     }
 
     #[inline(always)]
+    /// This helper function connects the parent of `target` to `source`.
+    /// It is the start of the process of removing `target` from the tree.
     fn transplant(&mut self, target: u32, source: u32) {
         let parent = self.get_parent(target);
         if parent == SENTINEL {
@@ -638,10 +665,10 @@ pub struct RedBlackTreeIterator<
     V: Default + Copy + Clone + Pod + Zeroable,
     const MAX_SIZE: usize,
 > {
-    pub tree: &'a RedBlackTree<K, V, MAX_SIZE>,
-    pub stack: Vec<u32>,
-    pub rev_stack: Vec<u32>,
-    pub node: u32,
+    tree: &'a RedBlackTree<K, V, MAX_SIZE>,
+    stack: Vec<u32>,
+    rev_stack: Vec<u32>,
+    node: u32,
 }
 
 impl<
@@ -698,10 +725,10 @@ pub struct RedBlackTreeIteratorMut<
     V: Default + Copy + Clone + Pod + Zeroable,
     const MAX_SIZE: usize,
 > {
-    pub tree: &'a mut RedBlackTree<K, V, MAX_SIZE>,
-    pub stack: Vec<u32>,
-    pub rev_stack: Vec<u32>,
-    pub node: u32,
+    tree: &'a mut RedBlackTree<K, V, MAX_SIZE>,
+    stack: Vec<u32>,
+    rev_stack: Vec<u32>,
+    node: u32,
 }
 
 impl<
@@ -794,4 +821,259 @@ impl<
     fn index_mut(&mut self, index: &K) -> &mut Self::Output {
         self.get_mut(index).unwrap()
     }
+}
+
+#[test]
+/// This test addresses the case where a node's parent and uncle are both red.
+/// This is resolved by coloring the parent and uncle black and the grandparent red.
+fn test_insert_with_red_parent_and_uncle() {
+    type RBT = RedBlackTree<u64, u64, 1024>;
+    let mut buf = vec![0u8; std::mem::size_of::<RBT>()];
+    let tree = RBT::new_from_slice(buf.as_mut_slice());
+    let addrs = vec![
+        tree.insert(61, 0).unwrap(),
+        tree.insert(52, 0).unwrap(),
+        tree.insert(85, 0).unwrap(),
+        tree.insert(76, 0).unwrap(),
+        tree.insert(93, 0).unwrap(),
+    ];
+
+    let parent = addrs[4];
+    let uncle = addrs[3];
+    let grandparent = addrs[2];
+
+    assert_eq!(tree.get_left(addrs[0]), addrs[1]);
+    assert_eq!(tree.get_right(addrs[0]), grandparent);
+    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+    assert_eq!(tree.get_parent(grandparent), addrs[0]);
+
+    assert_eq!(tree.get_left(grandparent), uncle);
+    assert_eq!(tree.get_right(grandparent), parent);
+    assert_eq!(tree.get_parent(uncle), grandparent);
+    assert_eq!(tree.get_parent(parent), grandparent);
+
+    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(grandparent));
+    assert!(tree.is_red(uncle) && tree.is_red(parent));
+
+    let leaf = tree.insert(100, 0).unwrap();
+
+    assert!(
+        tree.is_black(addrs[0])
+            && tree.is_black(addrs[1])
+            && tree.is_black(uncle)
+            && tree.is_black(parent)
+    );
+    assert!(tree.is_red(grandparent) && tree.is_red(leaf));
+}
+
+#[test]
+/// This test addresses the case where a node's parent (P) is red and uncle is black.
+/// The new leaf (L) is the right child of the parent and the parent is the right
+/// child of the grandparent (G).
+///
+/// "P is right child of G and L is right child of P."
+///
+/// We resolve this by rotating the grandparent left and then
+/// fixing the colors.
+fn test_right_insert_with_red_right_child_parent_and_black_uncle() {
+    type RBT = RedBlackTree<u64, u64, 1024>;
+    let mut buf = vec![0u8; std::mem::size_of::<RBT>()];
+    let tree = RBT::new_from_slice(buf.as_mut_slice());
+    let addrs = vec![
+        tree.insert(61, 0).unwrap(),
+        tree.insert(52, 0).unwrap(),
+        tree.insert(85, 0).unwrap(),
+        tree.insert(93, 0).unwrap(),
+    ];
+
+    let parent = addrs[3];
+    // Uncle is black as it is null
+    let grandparent = addrs[2];
+
+    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(grandparent));
+    assert!(tree.is_red(parent));
+
+    assert_eq!(tree.get_left(addrs[0]), addrs[1]);
+    assert_eq!(tree.get_right(addrs[0]), grandparent);
+    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+    assert_eq!(tree.get_parent(grandparent), addrs[0]);
+
+    assert_eq!(tree.get_left(grandparent), SENTINEL);
+    assert_eq!(tree.get_right(grandparent), parent);
+    assert_eq!(tree.get_parent(parent), grandparent);
+
+    let leaf = tree.insert(100, 0).unwrap();
+
+    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(parent));
+    assert!(tree.is_red(grandparent) && tree.is_red(leaf));
+
+    assert_eq!(tree.get_left(addrs[0]), addrs[1]);
+    assert_eq!(tree.get_right(addrs[0]), parent);
+    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+    assert_eq!(tree.get_parent(parent), addrs[0]);
+
+    assert_eq!(tree.get_left(parent), grandparent);
+    assert_eq!(tree.get_right(parent), leaf);
+    assert_eq!(tree.get_parent(grandparent), parent);
+    assert_eq!(tree.get_parent(leaf), parent);
+    assert!(tree.is_leaf(leaf) && tree.is_leaf(grandparent));
+}
+
+#[test]
+/// This test addresses the case where a node's parent is red and uncle is black.
+/// The new leaf is the left child of the parent and the parent is the right
+/// child of the grandparent.
+///
+/// "P is right child of G and L is left child of P."
+///
+/// We resolve this by rotating the parent right then applying the same
+/// algorithm as the previous test.
+fn test_left_insert_with_red_right_child_parent_and_black_uncle() {
+    type RBT = RedBlackTree<u64, u64, 1024>;
+    let mut buf = vec![0u8; std::mem::size_of::<RBT>()];
+    let tree = RBT::new_from_slice(buf.as_mut_slice());
+    let addrs = vec![
+        tree.insert(61, 0).unwrap(),
+        tree.insert(52, 0).unwrap(),
+        tree.insert(85, 0).unwrap(),
+        tree.insert(93, 0).unwrap(),
+    ];
+
+    let parent = addrs[3];
+    // Uncle is black as it is null
+    let grandparent = addrs[2];
+
+    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(grandparent));
+    assert!(tree.is_red(parent));
+
+    assert_eq!(tree.get_left(addrs[0]), addrs[1]);
+    assert_eq!(tree.get_right(addrs[0]), grandparent);
+    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+    assert_eq!(tree.get_parent(grandparent), addrs[0]);
+
+    assert_eq!(tree.get_left(grandparent), SENTINEL);
+    assert_eq!(tree.get_right(grandparent), parent);
+    assert_eq!(tree.get_parent(parent), grandparent);
+
+    let leaf = tree.insert(87, 0).unwrap();
+
+    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(leaf));
+    assert!(tree.is_red(grandparent) && tree.is_red(parent));
+
+    assert_eq!(tree.get_left(addrs[0]), addrs[1]);
+    assert_eq!(tree.get_right(addrs[0]), leaf);
+    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+    assert_eq!(tree.get_parent(leaf), addrs[0]);
+
+    assert_eq!(tree.get_left(leaf), grandparent);
+    assert_eq!(tree.get_right(leaf), parent);
+    assert_eq!(tree.get_parent(grandparent), leaf);
+    assert_eq!(tree.get_parent(parent), leaf);
+    assert!(tree.is_leaf(parent) && tree.is_leaf(grandparent));
+}
+
+#[test]
+/// This test addresses the case where a node's parent is red and uncle is black.
+/// The new leaf is the left child of the parent and the parent is the left
+/// child of the grandparent.
+///
+/// "P is left child of G and L is left child of P."
+///
+/// We resolve this by rotating the grandparent right and then
+/// fixing the colors.
+fn test_left_insert_with_red_left_child_parent_and_black_uncle() {
+    type RBT = RedBlackTree<u64, u64, 1024>;
+    let mut buf = vec![0u8; std::mem::size_of::<RBT>()];
+    let tree = RBT::new_from_slice(buf.as_mut_slice());
+    let addrs = vec![
+        tree.insert(61, 0).unwrap(),
+        tree.insert(85, 0).unwrap(),
+        tree.insert(52, 0).unwrap(),
+        tree.insert(41, 0).unwrap(),
+    ];
+
+    let parent = addrs[3];
+    // Uncle is black as it is null
+    let grandparent = addrs[2];
+
+    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(grandparent));
+    assert!(tree.is_red(parent));
+
+    assert_eq!(tree.get_right(addrs[0]), addrs[1]);
+    assert_eq!(tree.get_left(addrs[0]), grandparent);
+    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+    assert_eq!(tree.get_parent(grandparent), addrs[0]);
+
+    assert_eq!(tree.get_right(grandparent), SENTINEL);
+    assert_eq!(tree.get_left(grandparent), parent);
+    assert_eq!(tree.get_parent(parent), grandparent);
+
+    let leaf = tree.insert(25, 0).unwrap();
+
+    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(parent));
+    assert!(tree.is_red(grandparent) && tree.is_red(leaf));
+
+    assert_eq!(tree.get_right(addrs[0]), addrs[1]);
+    assert_eq!(tree.get_left(addrs[0]), parent);
+    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+    assert_eq!(tree.get_parent(parent), addrs[0]);
+
+    assert_eq!(tree.get_right(parent), grandparent);
+    assert_eq!(tree.get_left(parent), leaf);
+    assert_eq!(tree.get_parent(grandparent), parent);
+    assert_eq!(tree.get_parent(leaf), parent);
+    assert!(tree.is_leaf(leaf) && tree.is_leaf(grandparent));
+}
+
+#[test]
+/// This test addresses the case where a node's parent is red and uncle is black.
+/// The new leaf is the right child of the parent and the parent is the left
+/// child of the grandparent.
+///
+/// "P is left child of G and L is right child of P."
+///
+/// We resolve this by rotating the parent left then applying the same
+/// algorithm as the previous test.
+fn test_right_insert_with_red_left_child_parent_and_black_uncle() {
+    type RBT = RedBlackTree<u64, u64, 1024>;
+    let mut buf = vec![0u8; std::mem::size_of::<RBT>()];
+    let tree = RBT::new_from_slice(buf.as_mut_slice());
+    let addrs = vec![
+        tree.insert(61, 0).unwrap(),
+        tree.insert(85, 0).unwrap(),
+        tree.insert(52, 0).unwrap(),
+        tree.insert(41, 0).unwrap(),
+    ];
+
+    let parent = addrs[3];
+    // Uncle is black as it is null
+    let grandparent = addrs[2];
+
+    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(grandparent));
+    assert!(tree.is_red(parent));
+
+    assert_eq!(tree.get_right(addrs[0]), addrs[1]);
+    assert_eq!(tree.get_left(addrs[0]), grandparent);
+    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+    assert_eq!(tree.get_parent(grandparent), addrs[0]);
+
+    assert_eq!(tree.get_right(grandparent), SENTINEL);
+    assert_eq!(tree.get_left(grandparent), parent);
+    assert_eq!(tree.get_parent(parent), grandparent);
+
+    let leaf = tree.insert(47, 0).unwrap();
+
+    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(leaf));
+    assert!(tree.is_red(grandparent) && tree.is_red(parent));
+
+    assert_eq!(tree.get_right(addrs[0]), addrs[1]);
+    assert_eq!(tree.get_left(addrs[0]), leaf);
+    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+    assert_eq!(tree.get_parent(leaf), addrs[0]);
+
+    assert_eq!(tree.get_right(leaf), grandparent);
+    assert_eq!(tree.get_left(leaf), parent);
+    assert_eq!(tree.get_parent(grandparent), leaf);
+    assert_eq!(tree.get_parent(parent), leaf);
+    assert!(tree.is_leaf(parent) && tree.is_leaf(grandparent));
 }

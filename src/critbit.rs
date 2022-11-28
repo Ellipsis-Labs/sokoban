@@ -11,6 +11,7 @@ use crate::node_allocator::{
 pub struct CritbitNode {
     pub key: u128,
     pub prefix_len: u64,
+    pub _padding: u64,
 }
 
 unsafe impl Zeroable for CritbitNode {}
@@ -18,7 +19,11 @@ unsafe impl Pod for CritbitNode {}
 
 impl CritbitNode {
     pub fn new(prefix_len: u64, key: u128) -> Self {
-        Self { prefix_len, key }
+        Self {
+            prefix_len,
+            key,
+            _padding: 0,
+        }
     }
 }
 
@@ -28,13 +33,14 @@ pub struct Critbit<
     const NUM_NODES: usize,
     const MAX_SIZE: usize,
 > {
+    _padding: u64,
     /// Root node of the critbit tree
     pub root: u64,
     /// Allocator corresponding to inner nodes and leaf pointers of the critbit
     node_allocator: NodeAllocator<CritbitNode, NUM_NODES, 4>,
     /// Allocator corresponding to the leaves of the critbit. Note that this
-    /// requires 2 registers per leaf to support proper alignment
-    leaves: NodeAllocator<V, MAX_SIZE, 2>,
+    /// requires 4 registers per leaf to support proper alignment (for aarch64)
+    leaves: NodeAllocator<V, MAX_SIZE, 4>,
 }
 
 unsafe impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
@@ -58,9 +64,10 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     fn default() -> Self {
         assert!(NUM_NODES >= 2 * MAX_SIZE);
         Self {
+            _padding: 0,
             root: SENTINEL as u64,
             node_allocator: NodeAllocator::<CritbitNode, NUM_NODES, 4>::default(),
-            leaves: NodeAllocator::<V, MAX_SIZE, 2>::default(),
+            leaves: NodeAllocator::<V, MAX_SIZE, 4>::default(),
         }
     }
 }
@@ -70,7 +77,6 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
 {
     fn new_from_slice(slice: &mut [u8]) -> &mut Self {
         assert!(NUM_NODES >= 2 * MAX_SIZE);
-        Self::assert_proper_alignment();
         let tree = Self::load_mut_bytes(slice).unwrap();
         tree.initialize();
         tree
@@ -182,14 +188,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
 impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
     Critbit<V, NUM_NODES, MAX_SIZE>
 {
-    fn assert_proper_alignment() {
-        #[cfg(target_arch = "aarch64")]
-        panic!("Byte alignment for Critbit is invalid for aarch64");
-        assert!(std::mem::align_of::<V>() == 8);
-    }
-
     pub fn new() -> Self {
-        Self::assert_proper_alignment();
         Self::default()
     }
 
