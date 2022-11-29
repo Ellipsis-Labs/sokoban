@@ -8,7 +8,7 @@ This is unaudited code, and still very rough around the edges. Proceed with caut
 
 ### Benchmarks
 
-Based on simple benchmarks, the naive performance of Sokoban data structures are on par with, but slightly slower than, the Rust Standard Library. Critbit is the exception for small sizes, but this should not be surprising as the insertion is amortized O(1) with very few reorgs of the data.
+Based on simple benchmarks, the naive performance of Sokoban data structures are on par with, but slightly slower than, the Rust Standard Library.
 
 ```
 test bench_tests::bench_sokoban_avl_tree_insert_1000_u128             ... bench:     134,301 ns/iter (+/- 4,033)
