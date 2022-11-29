@@ -483,21 +483,21 @@ impl<
     }
 
     fn _insert(&mut self, key: K, value: V) -> Option<u32> {
-        let mut node_index = self.root;
+        let mut parent_node_index = self.root;
         let new_node = RBNode::<K, V>::new(key, value);
-        if node_index == SENTINEL {
+        if parent_node_index == SENTINEL {
             let node_index = self.allocator.add_node(new_node);
             self.root = node_index;
             return Some(node_index);
         }
         loop {
-            let curr_key = self.get_node(node_index).key;
+            let curr_key = self.get_node(parent_node_index).key;
             let (target, dir) = match key.cmp(&curr_key) {
-                Ordering::Less => (self.get_left(node_index), Field::Left as u32),
-                Ordering::Greater => (self.get_right(node_index), Field::Right as u32),
+                Ordering::Less => (self.get_left(parent_node_index), Field::Left as u32),
+                Ordering::Greater => (self.get_right(parent_node_index), Field::Right as u32),
                 Ordering::Equal => {
-                    self.get_node_mut(node_index).value = value;
-                    return Some(node_index);
+                    self.get_node_mut(parent_node_index).value = value;
+                    return Some(parent_node_index);
                 }
             };
             if target == SENTINEL {
@@ -506,7 +506,7 @@ impl<
                 }
                 let node_index = self.allocator.add_node(new_node);
                 self._color_red(node_index);
-                self._connect(node_index, node_index, dir);
+                self._connect(parent_node_index, node_index, dir);
                 let grandparent = self.get_parent(node_index);
                 // This is only false when the parent is the root
                 if grandparent != SENTINEL {
@@ -514,7 +514,7 @@ impl<
                 }
                 return Some(node_index);
             }
-            node_index = target
+            parent_node_index = target
         }
     }
 
