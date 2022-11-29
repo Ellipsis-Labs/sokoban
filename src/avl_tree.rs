@@ -61,6 +61,7 @@ impl<
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub struct AVLTree<
     K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,

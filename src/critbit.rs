@@ -27,6 +27,7 @@ impl CritbitNode {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub struct Critbit<
     V: Default + Copy + Clone + Pod + Zeroable,

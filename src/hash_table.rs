@@ -42,6 +42,7 @@ impl<
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub struct HashTable<
     K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,

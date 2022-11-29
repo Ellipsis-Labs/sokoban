@@ -5,6 +5,7 @@ use bytemuck::{Pod, Zeroable};
 pub const PREV: u32 = 0;
 pub const NEXT: u32 = 1;
 
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub struct Deque<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> {
     pub sequence_number: u64,

@@ -63,6 +63,7 @@ impl<
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub struct RedBlackTree<
     K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
