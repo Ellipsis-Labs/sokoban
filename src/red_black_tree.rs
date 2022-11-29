@@ -507,7 +507,7 @@ impl<
                 let node_index = self.allocator.add_node(new_node);
                 self._color_red(node_index);
                 self._connect(parent_node_index, node_index, dir);
-                let grandparent = self.get_parent(node_index);
+                let grandparent = self.get_parent(parent_node_index);
                 // This is only false when the parent is the root
                 if grandparent != SENTINEL {
                     self._fix_insert(node_index);
