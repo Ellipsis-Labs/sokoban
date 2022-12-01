@@ -1,0 +1,48 @@
+[package]
+name = "sokoban-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.3.0"
+arbitrary = { version = "0.4.6", features = ["derive"] }
+rand = "0.7"
+
+[dependencies.lib-sokoban]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "fuzz_red_black_tree"
+path = "fuzz_targets/fuzz_red_black_tree.rs"
+test = false
+doc = false
+
+
+[[bin]]
+name = "fuzz_critbit"
+path = "fuzz_targets/fuzz_critbit.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_hash_table"
+path = "fuzz_targets/fuzz_hash_table.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_avl_tree"
+path = "fuzz_targets/fuzz_avl_tree.rs"
+test = false
+doc = false
