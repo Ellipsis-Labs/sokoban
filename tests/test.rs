@@ -167,6 +167,30 @@ where
             assert!(*v1 == *v2);
         }
     }
+
+    let mut new_map = BTreeMap::new();
+    for (k, v) in tree.iter_mut().rev() {
+        let w = Widget::new_random(&mut rng);
+        *v = w;
+        new_map.insert(*k, w);
+    }
+
+    if expect_sorted {
+        for ((k1, v1), (k2, v2)) in new_map.iter().zip(tree.iter()) {
+            assert!(*k1 == *k2);
+            assert!(*v1 == *v2);
+        }
+        for ((k1, v1), (k2, v2)) in new_map.iter().rev().zip(tree.iter().rev()) {
+            assert!(*k1 == *k2);
+            assert!(*v1 == *v2);
+        }
+    } else {
+        for ((k1, v1), (k2, v2)) in new_map.iter().zip(tree.iter().sorted()) {
+            assert!(*k1 == *k2);
+            assert!(*v1 == *v2);
+        }
+    }
+
     println!("{} Size: {}", std::any::type_name::<T>(), tree.len(),);
 }
 

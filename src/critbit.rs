@@ -34,9 +34,10 @@ pub struct Critbit<
     const NUM_NODES: usize,
     const MAX_SIZE: usize,
 > {
-    _padding: u64,
+    _padding0: u64,
     /// Root node of the critbit tree
-    pub root: u64,
+    pub root: u32,
+    _padding1: u32,
     /// Allocator corresponding to inner nodes and leaf pointers of the critbit
     node_allocator: NodeAllocator<CritbitNode, NUM_NODES, 4>,
     /// Allocator corresponding to the leaves of the critbit. Note that this
@@ -65,8 +66,9 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     fn default() -> Self {
         assert!(NUM_NODES >= 2 * MAX_SIZE);
         Self {
-            _padding: 0,
-            root: SENTINEL as u64,
+            _padding0: 0,
+            root: SENTINEL,
+            _padding1: 0,
             node_allocator: NodeAllocator::<CritbitNode, NUM_NODES, 4>::default(),
             leaves: NodeAllocator::<V, MAX_SIZE, 4>::default(),
         }
@@ -100,7 +102,10 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     }
 
     fn get(&self, key: &u128) -> Option<&V> {
-        let mut node_index = self.root as u32;
+        if self.is_empty() {
+            return None;
+        }
+        let mut node_index = self.root;
         loop {
             let node = self.get_node(node_index);
             if !self.is_inner_node(node_index) {
@@ -120,6 +125,9 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     }
 
     fn get_mut(&mut self, key: &u128) -> Option<&mut V> {
+        if self.is_empty() {
+            return None;
+        }
         let mut node_index = self.root as u32;
         loop {
             let node = self.get_node(node_index);
@@ -391,16 +399,16 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     }
 
     fn _insert(&mut self, key: u128, value: V) -> Option<u32> {
-        if self.root as u32 == SENTINEL {
+        if self.root == SENTINEL {
             let (node_index, _leaf_index) = self.add_leaf(key, value);
-            self.root = node_index as u64;
-            return Some(self.root as u32);
+            self.root = node_index;
+            return Some(self.root);
         }
         // Return None if the tree is filled up
         if self.len() >= self.capacity() {
             return None;
         }
-        let mut node_index = self.root as u32;
+        let mut node_index = self.root;
         loop {
             let node = self.get_node(node_index);
             if node.key == key && !self.is_inner_node(node_index) {
@@ -431,7 +439,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     fn _remove(&mut self, key: &u128) -> Option<V> {
         let nsize = self.node_allocator.size;
         let lsize = self.leaves.size;
-        let mut parent = self.root as u32;
+        let mut parent = self.root;
         let mut child: u32;
         let mut is_right: bool;
         if self.len() == 0 {
@@ -445,7 +453,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         } else {
             let leaf = self.get_node(parent);
             if leaf.key == *key {
-                self.root = SENTINEL as u64;
+                self.root = SENTINEL;
                 assert!(self.len() == 1);
                 return Some(self.remove_leaf(parent));
             } else {
@@ -496,19 +504,35 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     }
 
     fn _iter(&self) -> CritbitIterator<'_, V, NUM_NODES, MAX_SIZE> {
-        CritbitIterator::<V, NUM_NODES, MAX_SIZE> {
-            tree: self,
-            stack: vec![self.root as u32],
-            rev_stack: vec![self.root as u32],
+        if self.root == SENTINEL {
+            CritbitIterator::<V, NUM_NODES, MAX_SIZE> {
+                tree: self,
+                stack: vec![],
+                rev_stack: vec![],
+            }
+        } else {
+            CritbitIterator::<V, NUM_NODES, MAX_SIZE> {
+                tree: self,
+                stack: vec![self.root],
+                rev_stack: vec![self.root],
+            }
         }
     }
 
     fn _iter_mut(&mut self) -> CritbitIteratorMut<'_, V, NUM_NODES, MAX_SIZE> {
-        let node = self.root as u32;
-        CritbitIteratorMut::<V, NUM_NODES, MAX_SIZE> {
-            tree: self,
-            stack: vec![node],
-            rev_stack: vec![node],
+        let node = self.root;
+        if node == SENTINEL {
+            CritbitIteratorMut::<V, NUM_NODES, MAX_SIZE> {
+                tree: self,
+                stack: vec![],
+                rev_stack: vec![],
+            }
+        } else {
+            CritbitIteratorMut::<V, NUM_NODES, MAX_SIZE> {
+                tree: self,
+                stack: vec![node],
+                rev_stack: vec![node],
+            }
         }
     }
 }

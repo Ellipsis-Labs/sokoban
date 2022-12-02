@@ -147,44 +147,20 @@ impl<
     }
 
     fn get(&self, key: &K) -> Option<&V> {
-        let mut node_index = self.root;
+        let node_index = self.get_addr(key);
         if node_index == SENTINEL {
-            return None;
-        }
-        loop {
-            let curr_key = self.get_node(node_index).key;
-            let target = match key.cmp(&curr_key) {
-                Ordering::Less => self.get_left(node_index),
-                Ordering::Greater => self.get_right(node_index),
-                Ordering::Equal => {
-                    return Some(&self.get_node(node_index).value);
-                }
-            };
-            if target == SENTINEL {
-                return None;
-            }
-            node_index = target
+            None
+        } else {
+            Some(&self.get_node(node_index).value)
         }
     }
 
     fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        let mut node_index = self.root;
+        let node_index = self.get_addr(key);
         if node_index == SENTINEL {
-            return None;
-        }
-        loop {
-            let curr_key = self.get_node(node_index).key;
-            let target = match key.cmp(&curr_key) {
-                Ordering::Less => self.get_left(node_index),
-                Ordering::Greater => self.get_right(node_index),
-                Ordering::Equal => {
-                    return Some(&mut self.get_node_mut(node_index).value);
-                }
-            };
-            if target == SENTINEL {
-                return None;
-            }
-            node_index = target
+            None
+        } else {
+            Some(&mut self.get_node_mut(node_index).value)
         }
     }
 
@@ -1289,11 +1265,8 @@ fn test_delete_multiple_random_2048() {
 
     assert!(index_tree.is_valid_red_black_tree());
     for i in index_keys.iter() {
-        println!("Removing {}", i);
         index_tree.remove(i).unwrap();
-        if !index_tree.is_valid_red_black_tree() {
-            panic!("Tree is not valid");
-        }
+        assert!(index_tree.is_valid_red_black_tree());
     }
 }
 
