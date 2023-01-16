@@ -602,9 +602,12 @@ impl<
     fn _iter(&self) -> AVLTreeIterator<'_, K, V, MAX_SIZE> {
         AVLTreeIterator::<K, V, MAX_SIZE> {
             tree: self,
-            stack: vec![],
+            fwd_stack: vec![],
+            fwd_ptr: self.root as u32,
+            fwd_node: None,
             rev_stack: vec![],
-            node: self.root as u32,
+            rev_ptr: self.root as u32,
+            rev_node: None,
         }
     }
 
@@ -612,9 +615,12 @@ impl<
         let node = self.root as u32;
         AVLTreeIteratorMut::<K, V, MAX_SIZE> {
             tree: self,
-            stack: vec![],
+            fwd_stack: vec![],
+            fwd_ptr: node,
+            fwd_node: None,
             rev_stack: vec![],
-            node,
+            rev_ptr: node,
+            rev_node: None,
         }
     }
 }
@@ -654,9 +660,12 @@ pub struct AVLTreeIterator<
     const MAX_SIZE: usize,
 > {
     tree: &'a AVLTree<K, V, MAX_SIZE>,
-    stack: Vec<u32>,
+    fwd_stack: Vec<u32>,
+    fwd_ptr: u32,
+    fwd_node: Option<u32>,
     rev_stack: Vec<u32>,
-    node: u32,
+    rev_ptr: u32,
+    rev_node: Option<u32>,
 }
 
 impl<
@@ -669,14 +678,19 @@ impl<
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while !self.stack.is_empty() || self.node != SENTINEL {
-            if self.node != SENTINEL {
-                self.stack.push(self.node);
-                self.node = self.tree.get_field(self.node, Field::Left);
+        while !self.fwd_stack.is_empty() || self.fwd_ptr != SENTINEL {
+            if self.fwd_ptr != SENTINEL {
+                self.fwd_stack.push(self.fwd_ptr);
+                self.fwd_ptr = self.tree.get_field(self.fwd_ptr, Field::Left);
             } else {
-                self.node = self.stack.pop().unwrap();
-                let node = self.tree.get_node(self.node);
-                self.node = self.tree.get_field(self.node, Field::Right);
+                let current_node = self.fwd_stack.pop();
+                if current_node == self.rev_node {
+                    self.fwd_stack.clear();
+                    return None;
+                }
+                self.fwd_node = current_node;
+                let node = self.tree.get_node(current_node.unwrap());
+                self.fwd_ptr = self.tree.get_field(current_node.unwrap(), Field::Right);
                 return Some((&node.key, &node.value));
             }
         }
@@ -692,14 +706,19 @@ impl<
     > DoubleEndedIterator for AVLTreeIterator<'a, K, V, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
-        while !self.rev_stack.is_empty() || self.node != SENTINEL {
-            if self.node != SENTINEL {
-                self.rev_stack.push(self.node);
-                self.node = self.tree.get_field(self.node, Field::Right);
+        while !self.rev_stack.is_empty() || self.rev_ptr != SENTINEL {
+            if self.rev_ptr != SENTINEL {
+                self.rev_stack.push(self.rev_ptr);
+                self.rev_ptr = self.tree.get_field(self.rev_ptr, Field::Right);
             } else {
-                self.node = self.rev_stack.pop().unwrap();
-                let node = self.tree.get_node(self.node);
-                self.node = self.tree.get_field(self.node, Field::Left);
+                let current_node = self.rev_stack.pop();
+                if current_node == self.fwd_node {
+                    self.rev_stack.clear();
+                    return None;
+                }
+                self.rev_node = current_node;
+                let node = self.tree.get_node(current_node.unwrap());
+                self.rev_ptr = self.tree.get_field(current_node.unwrap(), Field::Left);
                 return Some((&node.key, &node.value));
             }
         }
@@ -714,9 +733,12 @@ pub struct AVLTreeIteratorMut<
     const MAX_SIZE: usize,
 > {
     tree: &'a mut AVLTree<K, V, MAX_SIZE>,
-    stack: Vec<u32>,
+    fwd_stack: Vec<u32>,
+    fwd_ptr: u32,
+    fwd_node: Option<u32>,
     rev_stack: Vec<u32>,
-    node: u32,
+    rev_ptr: u32,
+    rev_node: Option<u32>,
 }
 
 impl<
@@ -729,14 +751,19 @@ impl<
     type Item = (&'a K, &'a mut V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while !self.stack.is_empty() || self.node != SENTINEL {
-            if self.node != SENTINEL {
-                self.stack.push(self.node);
-                self.node = self.tree.get_field(self.node, Field::Left);
+        while !self.fwd_stack.is_empty() || self.fwd_ptr != SENTINEL {
+            if self.fwd_ptr != SENTINEL {
+                self.fwd_stack.push(self.fwd_ptr);
+                self.fwd_ptr = self.tree.get_field(self.fwd_ptr, Field::Left);
             } else {
-                self.node = self.stack.pop().unwrap();
-                let ptr = self.node;
-                self.node = self.tree.get_field(ptr, Field::Right);
+                let current_node = self.fwd_stack.pop();
+                if current_node == self.rev_node {
+                    self.fwd_stack.clear();
+                    return None;
+                }
+                self.fwd_node = current_node;
+                let ptr = current_node.unwrap();
+                self.fwd_ptr = self.tree.get_field(ptr, Field::Right);
                 // TODO: How does one remove this unsafe?
                 unsafe {
                     let node = (*self
@@ -762,14 +789,19 @@ impl<
     > DoubleEndedIterator for AVLTreeIteratorMut<'a, K, V, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
-        while !self.rev_stack.is_empty() || self.node != SENTINEL {
-            if self.node != SENTINEL {
-                self.rev_stack.push(self.node);
-                self.node = self.tree.get_field(self.node, Field::Right);
+        while !self.rev_stack.is_empty() || self.rev_ptr != SENTINEL {
+            if self.rev_ptr != SENTINEL {
+                self.rev_stack.push(self.rev_ptr);
+                self.rev_ptr = self.tree.get_field(self.rev_ptr, Field::Right);
             } else {
-                self.node = self.rev_stack.pop().unwrap();
-                let ptr = self.node;
-                self.node = self.tree.get_field(ptr, Field::Left);
+                let current_node = self.rev_stack.pop();
+                if current_node == self.fwd_node {
+                    self.rev_stack.clear();
+                    return None;
+                }
+                self.rev_node = current_node;
+                let ptr = current_node.unwrap();
+                self.rev_ptr = self.tree.get_field(ptr, Field::Left);
                 // TODO: How does one remove this unsafe?
                 unsafe {
                     let node = (*self

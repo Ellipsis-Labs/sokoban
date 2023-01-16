@@ -712,9 +712,12 @@ impl<
     fn _iter(&self) -> RedBlackTreeIterator<'_, K, V, MAX_SIZE> {
         RedBlackTreeIterator::<K, V, MAX_SIZE> {
             tree: self,
-            stack: vec![],
+            fwd_stack: vec![],
+            fwd_ptr: self.root,
+            fwd_node: None,
             rev_stack: vec![],
-            node: self.root,
+            rev_ptr: self.root,
+            rev_node: None,
         }
     }
 
@@ -722,9 +725,12 @@ impl<
         let node = self.root;
         RedBlackTreeIteratorMut::<K, V, MAX_SIZE> {
             tree: self,
-            stack: vec![],
+            fwd_stack: vec![],
+            fwd_ptr: node,
+            fwd_node: None,
             rev_stack: vec![],
-            node,
+            rev_ptr: node,
+            rev_node: None,
         }
     }
 }
@@ -764,9 +770,12 @@ pub struct RedBlackTreeIterator<
     const MAX_SIZE: usize,
 > {
     tree: &'a RedBlackTree<K, V, MAX_SIZE>,
-    stack: Vec<u32>,
+    fwd_stack: Vec<u32>,
+    fwd_ptr: u32,
+    fwd_node: Option<u32>,
     rev_stack: Vec<u32>,
-    node: u32,
+    rev_ptr: u32,
+    rev_node: Option<u32>,
 }
 
 impl<
@@ -779,14 +788,19 @@ impl<
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while !self.stack.is_empty() || self.node != SENTINEL {
-            if self.node != SENTINEL {
-                self.stack.push(self.node);
-                self.node = self.tree.get_left(self.node);
+        while !self.fwd_stack.is_empty() || self.fwd_ptr != SENTINEL {
+            if self.fwd_ptr != SENTINEL {
+                self.fwd_stack.push(self.fwd_ptr);
+                self.fwd_ptr = self.tree.get_left(self.fwd_ptr);
             } else {
-                self.node = self.stack.pop().unwrap();
-                let node = self.tree.get_node(self.node);
-                self.node = self.tree.get_right(self.node);
+                let current_node = self.fwd_stack.pop();
+                if current_node == self.rev_node {
+                    self.fwd_stack.clear();
+                    return None;
+                }
+                self.fwd_node = current_node;
+                let node = self.tree.get_node(current_node.unwrap());
+                self.fwd_ptr = self.tree.get_right(current_node.unwrap());
                 return Some((&node.key, &node.value));
             }
         }
@@ -802,14 +816,19 @@ impl<
     > DoubleEndedIterator for RedBlackTreeIterator<'a, K, V, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
-        while !self.rev_stack.is_empty() || self.node != SENTINEL {
-            if self.node != SENTINEL {
-                self.rev_stack.push(self.node);
-                self.node = self.tree.get_right(self.node);
+        while !self.rev_stack.is_empty() || self.rev_ptr != SENTINEL {
+            if self.rev_ptr != SENTINEL {
+                self.rev_stack.push(self.rev_ptr);
+                self.rev_ptr = self.tree.get_right(self.rev_ptr);
             } else {
-                self.node = self.rev_stack.pop().unwrap();
-                let node = self.tree.get_node(self.node);
-                self.node = self.tree.get_left(self.node);
+                let current_node = self.rev_stack.pop();
+                if current_node == self.fwd_node {
+                    self.rev_stack.clear();
+                    return None;
+                }
+                self.rev_node = current_node;
+                let node = self.tree.get_node(current_node.unwrap());
+                self.rev_ptr = self.tree.get_left(current_node.unwrap());
                 return Some((&node.key, &node.value));
             }
         }
@@ -824,9 +843,12 @@ pub struct RedBlackTreeIteratorMut<
     const MAX_SIZE: usize,
 > {
     tree: &'a mut RedBlackTree<K, V, MAX_SIZE>,
-    stack: Vec<u32>,
+    fwd_stack: Vec<u32>,
+    fwd_ptr: u32,
+    fwd_node: Option<u32>,
     rev_stack: Vec<u32>,
-    node: u32,
+    rev_ptr: u32,
+    rev_node: Option<u32>,
 }
 
 impl<
@@ -839,18 +861,19 @@ impl<
     type Item = (&'a K, &'a mut V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        assert!(
-            self.rev_stack.is_empty(),
-            "Cannot call next() after calling next_back()"
-        );
-        while !self.stack.is_empty() || self.node != SENTINEL {
-            if self.node != SENTINEL {
-                self.stack.push(self.node);
-                self.node = self.tree.get_left(self.node);
+        while !self.fwd_stack.is_empty() || self.fwd_ptr != SENTINEL {
+            if self.fwd_ptr != SENTINEL {
+                self.fwd_stack.push(self.fwd_ptr);
+                self.fwd_ptr = self.tree.get_left(self.fwd_ptr);
             } else {
-                self.node = self.stack.pop().unwrap();
-                let ptr = self.node;
-                self.node = self.tree.get_right(ptr);
+                let current_node = self.fwd_stack.pop();
+                if current_node == self.rev_node {
+                    self.fwd_stack.clear();
+                    return None;
+                }
+                self.fwd_node = current_node;
+                let ptr = self.fwd_node.unwrap();
+                self.fwd_ptr = self.tree.get_right(ptr);
                 // TODO: How does one remove this unsafe?
                 unsafe {
                     let node = (*self
@@ -876,18 +899,19 @@ impl<
     > DoubleEndedIterator for RedBlackTreeIteratorMut<'a, K, V, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
-        assert!(
-            self.stack.is_empty(),
-            "Cannot call next_back() after calling next()"
-        );
-        while !self.stack.is_empty() || self.node != SENTINEL {
-            if self.node != SENTINEL {
-                self.rev_stack.push(self.node);
-                self.node = self.tree.get_right(self.node);
+        while !self.rev_stack.is_empty() || self.rev_ptr != SENTINEL {
+            if self.rev_ptr != SENTINEL {
+                self.rev_stack.push(self.rev_ptr);
+                self.rev_ptr = self.tree.get_right(self.rev_ptr);
             } else {
-                self.node = self.rev_stack.pop().unwrap();
-                let ptr = self.node;
-                self.node = self.tree.get_left(ptr);
+                let current_node = self.rev_stack.pop();
+                if current_node == self.fwd_node {
+                    self.rev_stack.clear();
+                    return None;
+                }
+                self.rev_node = current_node;
+                let ptr = self.rev_node.unwrap();
+                self.rev_ptr = self.tree.get_left(ptr);
                 // TODO: How does one remove this unsafe?
                 unsafe {
                     let node = (*self
