@@ -839,6 +839,10 @@ impl<
     type Item = (&'a K, &'a mut V);
 
     fn next(&mut self) -> Option<Self::Item> {
+        assert!(
+            self.rev_stack.is_empty(),
+            "Cannot call next() after calling next_back()"
+        );
         while !self.stack.is_empty() || self.node != SENTINEL {
             if self.node != SENTINEL {
                 self.stack.push(self.node);
@@ -872,6 +876,10 @@ impl<
     > DoubleEndedIterator for RedBlackTreeIteratorMut<'a, K, V, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
+        assert!(
+            self.stack.is_empty(),
+            "Cannot call next_back() after calling next()"
+        );
         while !self.stack.is_empty() || self.node != SENTINEL {
             if self.node != SENTINEL {
                 self.rev_stack.push(self.node);
@@ -1174,6 +1182,7 @@ fn test_right_insert_with_red_left_child_parent_and_black_uncle() {
     assert_eq!(tree.get_parent(grandparent), leaf);
     assert_eq!(tree.get_parent(parent), leaf);
     assert!(tree.is_leaf(parent) && tree.is_leaf(grandparent));
+    tree.pretty_print();
 }
 
 /// Test a power of 2 minus 1
