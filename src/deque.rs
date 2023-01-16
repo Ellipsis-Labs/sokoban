@@ -168,6 +168,7 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
             deque: self,
             fwd_ptr: self.head,
             rev_ptr: self.tail,
+            terminated: false,
         }
     }
 
@@ -176,9 +177,9 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         let tail = self.tail;
         DequeIteratorMut::<T, MAX_SIZE> {
             deque: self,
-            direction: IterationDirection::Idle,
             fwd_ptr: head,
             rev_ptr: tail,
+            terminated: false,
         }
     }
 }
@@ -187,6 +188,7 @@ pub struct DequeIterator<'a, T: Default + Copy + Clone + Pod + Zeroable, const M
     deque: &'a Deque<T, MAX_SIZE>,
     fwd_ptr: u32,
     rev_ptr: u32,
+    terminated: bool,
 }
 
 impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iterator
@@ -195,10 +197,16 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iter
     type Item = (usize, &'a T);
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.terminated {
+            return None;
+        }
         match self.fwd_ptr {
             SENTINEL => None,
             _ => {
                 let ptr = self.fwd_ptr;
+                if ptr == self.rev_ptr {
+                    self.terminated = true;
+                }
                 self.fwd_ptr = self.deque.get_next(ptr);
                 Some((ptr as usize, self.deque.get_node(ptr)))
             }
@@ -210,10 +218,16 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Doub
     for DequeIterator<'a, T, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
+        if self.terminated {
+            return None;
+        }
         match self.rev_ptr {
             SENTINEL => None,
             _ => {
                 let ptr = self.rev_ptr;
+                if ptr == self.fwd_ptr {
+                    self.terminated = true;
+                }
                 self.rev_ptr = self.deque.get_prev(ptr);
                 Some((ptr as usize, self.deque.get_node(ptr)))
             }
@@ -224,14 +238,8 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Doub
 pub struct DequeIteratorMut<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> {
     deque: &'a mut Deque<T, MAX_SIZE>,
     fwd_ptr: u32,
-    direction: IterationDirection,
     rev_ptr: u32,
-}
-
-enum IterationDirection {
-    Idle,
-    Forward,
-    Backward,
+    terminated: bool,
 }
 
 impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iterator
@@ -240,17 +248,16 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iter
     type Item = (usize, &'a mut T);
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.direction {
-            IterationDirection::Idle => {
-                self.direction = IterationDirection::Forward;
-            }
-            IterationDirection::Backward => return None,
-            IterationDirection::Forward => {}
+        if self.terminated {
+            return None;
         }
         match self.fwd_ptr {
             SENTINEL => None,
             _ => {
                 let ptr = self.fwd_ptr;
+                if ptr == self.rev_ptr {
+                    self.terminated = true;
+                }
                 self.fwd_ptr = self.deque.get_next(ptr);
                 Some((ptr as usize, unsafe {
                     (*self
@@ -270,17 +277,16 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Doub
     for DequeIteratorMut<'a, T, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
-        match self.direction {
-            IterationDirection::Idle => {
-                self.direction = IterationDirection::Backward;
-            }
-            IterationDirection::Forward => return None,
-            IterationDirection::Backward => {}
+        if self.terminated {
+            return None;
         }
         match self.rev_ptr {
             SENTINEL => None,
             _ => {
                 let ptr = self.rev_ptr;
+                if ptr == self.fwd_ptr {
+                    self.terminated = true;
+                }
                 self.rev_ptr = self.deque.get_prev(ptr);
                 Some((ptr as usize, unsafe {
                     (*self
@@ -323,6 +329,51 @@ fn test_deque() {
     for ((_, i), j) in q.iter().rev().zip(v.iter().rev()) {
         assert_eq!(i, j);
     }
+
+    {
+        let mut q_iter = q.iter();
+        let mut v_iter = v.iter();
+        let breakpoint = rng.gen_range(1, 255);
+        for _ in 0..breakpoint {
+            assert_eq!(q_iter.next().map(|x| x.1), v_iter.next());
+        }
+        for _ in breakpoint..256 {
+            assert_eq!(q_iter.next_back().map(|x| x.1), v_iter.next_back());
+        }
+
+        assert!(q_iter.next().is_none());
+        assert!(q_iter.next_back().is_none());
+        assert!(v_iter.next().is_none());
+        assert!(v_iter.next_back().is_none());
+        // Do it again for good measure
+        assert!(q_iter.next().is_none());
+        assert!(q_iter.next_back().is_none());
+        assert!(v_iter.next().is_none());
+        assert!(v_iter.next_back().is_none());
+    }
+
+    {
+        let mut q_iter_mut = q.iter_mut();
+        let mut v_iter_mut = v.iter_mut();
+        let breakpoint = rng.gen_range(1, 255);
+        for _ in 0..breakpoint {
+            assert_eq!(q_iter_mut.next().map(|x| x.1), v_iter_mut.next());
+        }
+        for _ in breakpoint..256 {
+            assert_eq!(q_iter_mut.next_back().map(|x| x.1), v_iter_mut.next_back());
+        }
+
+        assert!(q_iter_mut.next().is_none());
+        assert!(q_iter_mut.next_back().is_none());
+        assert!(v_iter_mut.next().is_none());
+        assert!(v_iter_mut.next_back().is_none());
+        // Do it again for good measure
+        assert!(q_iter_mut.next().is_none());
+        assert!(q_iter_mut.next_back().is_none());
+        assert!(v_iter_mut.next().is_none());
+        assert!(v_iter_mut.next_back().is_none());
+    }
+
     (0..256).for_each(|_| {
         assert_eq!(q.pop_back(), v.pop_back());
     });

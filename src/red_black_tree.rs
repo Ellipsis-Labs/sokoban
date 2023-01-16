@@ -718,6 +718,7 @@ impl<
             rev_stack: vec![],
             rev_ptr: self.root,
             rev_node: None,
+            terminated: false,
         }
     }
 
@@ -731,6 +732,7 @@ impl<
             rev_stack: vec![],
             rev_ptr: node,
             rev_node: None,
+            terminated: false,
         }
     }
 }
@@ -776,6 +778,7 @@ pub struct RedBlackTreeIterator<
     rev_stack: Vec<u32>,
     rev_ptr: u32,
     rev_node: Option<u32>,
+    terminated: bool,
 }
 
 impl<
@@ -788,14 +791,14 @@ impl<
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while !self.fwd_stack.is_empty() || self.fwd_ptr != SENTINEL {
+        while !self.terminated && (!self.fwd_stack.is_empty() || self.fwd_ptr != SENTINEL) {
             if self.fwd_ptr != SENTINEL {
                 self.fwd_stack.push(self.fwd_ptr);
                 self.fwd_ptr = self.tree.get_left(self.fwd_ptr);
             } else {
                 let current_node = self.fwd_stack.pop();
                 if current_node == self.rev_node {
-                    self.fwd_stack.clear();
+                    self.terminated = true;
                     return None;
                 }
                 self.fwd_node = current_node;
@@ -816,14 +819,14 @@ impl<
     > DoubleEndedIterator for RedBlackTreeIterator<'a, K, V, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
-        while !self.rev_stack.is_empty() || self.rev_ptr != SENTINEL {
+        while !self.terminated && (!self.rev_stack.is_empty() || self.rev_ptr != SENTINEL) {
             if self.rev_ptr != SENTINEL {
                 self.rev_stack.push(self.rev_ptr);
                 self.rev_ptr = self.tree.get_right(self.rev_ptr);
             } else {
                 let current_node = self.rev_stack.pop();
                 if current_node == self.fwd_node {
-                    self.rev_stack.clear();
+                    self.terminated = true;
                     return None;
                 }
                 self.rev_node = current_node;
@@ -849,6 +852,7 @@ pub struct RedBlackTreeIteratorMut<
     rev_stack: Vec<u32>,
     rev_ptr: u32,
     rev_node: Option<u32>,
+    terminated: bool,
 }
 
 impl<
@@ -861,14 +865,14 @@ impl<
     type Item = (&'a K, &'a mut V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while !self.fwd_stack.is_empty() || self.fwd_ptr != SENTINEL {
+        while !self.terminated && (!self.fwd_stack.is_empty() || self.fwd_ptr != SENTINEL) {
             if self.fwd_ptr != SENTINEL {
                 self.fwd_stack.push(self.fwd_ptr);
                 self.fwd_ptr = self.tree.get_left(self.fwd_ptr);
             } else {
                 let current_node = self.fwd_stack.pop();
                 if current_node == self.rev_node {
-                    self.fwd_stack.clear();
+                    self.terminated = true;
                     return None;
                 }
                 self.fwd_node = current_node;
@@ -899,14 +903,14 @@ impl<
     > DoubleEndedIterator for RedBlackTreeIteratorMut<'a, K, V, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
-        while !self.rev_stack.is_empty() || self.rev_ptr != SENTINEL {
+        while !self.terminated && (!self.rev_stack.is_empty() || self.rev_ptr != SENTINEL) {
             if self.rev_ptr != SENTINEL {
                 self.rev_stack.push(self.rev_ptr);
                 self.rev_ptr = self.tree.get_right(self.rev_ptr);
             } else {
                 let current_node = self.rev_stack.pop();
                 if current_node == self.fwd_node {
-                    self.rev_stack.clear();
+                    self.terminated = true;
                     return None;
                 }
                 self.rev_node = current_node;

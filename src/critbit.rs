@@ -511,6 +511,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
                 fwd_node: None,
                 rev_stack: vec![],
                 rev_node: None,
+                terminated: false,
             }
         } else {
             CritbitIterator::<V, NUM_NODES, MAX_SIZE> {
@@ -519,6 +520,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
                 fwd_node: None,
                 rev_stack: vec![self.root],
                 rev_node: None,
+                terminated: false,
             }
         }
     }
@@ -532,6 +534,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
                 fwd_node: None,
                 rev_stack: vec![],
                 rev_node: None,
+                terminated: false,
             }
         } else {
             CritbitIteratorMut::<V, NUM_NODES, MAX_SIZE> {
@@ -540,6 +543,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
                 fwd_node: None,
                 rev_stack: vec![node],
                 rev_node: None,
+                terminated: false,
             }
         }
     }
@@ -586,6 +590,7 @@ pub struct CritbitIterator<
     fwd_node: Option<u32>,
     rev_stack: Vec<u32>,
     rev_node: Option<u32>,
+    terminated: bool,
 }
 
 impl<
@@ -598,14 +603,14 @@ impl<
     type Item = (&'a u128, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while !self.fwd_stack.is_empty() {
+        while !self.terminated && !self.fwd_stack.is_empty() {
             let node = self.fwd_stack.pop();
             match node {
                 Some(n) => {
                     if !self.tree.is_inner_node(n) {
                         let i = self.tree.get_leaf_index(n);
                         if Some(i) == self.rev_node {
-                            self.fwd_stack.clear();
+                            self.terminated = true;
                             return None;
                         }
                         self.fwd_node = Some(i);
@@ -632,14 +637,14 @@ impl<
     > DoubleEndedIterator for CritbitIterator<'a, V, MAX_NODES, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
-        while !self.rev_stack.is_empty() {
+        while !self.terminated && !self.rev_stack.is_empty() {
             let node = self.rev_stack.pop();
             match node {
                 Some(n) => {
                     if !self.tree.is_inner_node(n) {
                         let i = self.tree.get_leaf_index(n);
                         if Some(i) == self.fwd_node {
-                            self.rev_stack.clear();
+                            self.terminated = true;
                             return None;
                         }
                         self.rev_node = Some(i);
@@ -669,6 +674,7 @@ pub struct CritbitIteratorMut<
     fwd_node: Option<u32>,
     rev_stack: Vec<u32>,
     rev_node: Option<u32>,
+    terminated: bool,
 }
 
 impl<
@@ -681,14 +687,14 @@ impl<
     type Item = (&'a u128, &'a mut V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while !self.fwd_stack.is_empty() {
+        while !self.terminated && !self.fwd_stack.is_empty() {
             let node = self.fwd_stack.pop();
             match node {
                 Some(n) => {
                     if !self.tree.is_inner_node(n) {
                         let i = self.tree.get_leaf_index(n);
                         if Some(i) == self.rev_node {
-                            self.fwd_stack.clear();
+                            self.terminated = true;
                             return None;
                         }
                         self.fwd_node = Some(i);
@@ -725,14 +731,14 @@ impl<
     > DoubleEndedIterator for CritbitIteratorMut<'a, V, MAX_NODES, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
-        while !self.rev_stack.is_empty() {
+        while !self.terminated && !self.rev_stack.is_empty() {
             let node = self.rev_stack.pop();
             match node {
                 Some(n) => {
                     if !self.tree.is_inner_node(n) {
                         let i = self.tree.get_leaf_index(n);
                         if Some(i) == self.fwd_node {
-                            self.rev_stack.clear();
+                            self.terminated = true;
                             return None;
                         }
                         self.rev_node = Some(i);
