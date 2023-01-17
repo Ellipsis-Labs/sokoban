@@ -191,6 +191,26 @@ where
             assert!(btree_map_iter.next().is_none());
             assert!(btree_map_iter.next_back().is_none());
         }
+        // Test iterator can't be used again after consumed
+        {
+            let mut node_allocator_iter = tree.iter();
+            for _ in 0..tree.len() {
+                assert!(node_allocator_iter.next().is_some());
+            }
+            assert!(node_allocator_iter.next().is_none());
+            assert!(node_allocator_iter.next_back().is_none());
+            assert!(node_allocator_iter.next().is_none());
+            assert!(node_allocator_iter.next_back().is_none());
+            let mut node_allocator_iter = tree.iter();
+
+            for _ in 0..tree.len() {
+                assert!(node_allocator_iter.next_back().is_some());
+            }
+            assert!(node_allocator_iter.next_back().is_none());
+            assert!(node_allocator_iter.next().is_none());
+            assert!(node_allocator_iter.next_back().is_none());
+            assert!(node_allocator_iter.next().is_none());
+        }
 
         // Test double ended iterator mut
         {
