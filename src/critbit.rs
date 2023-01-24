@@ -120,6 +120,8 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
             if shared_prefix_len >= node.prefix_len {
                 node_index = self.get_child(node.prefix_len, node_index, *key).0;
                 continue;
+            } else {
+                return None;
             }
         }
     }
@@ -143,6 +145,8 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
             if shared_prefix_len >= node.prefix_len {
                 node_index = self.get_child(node.prefix_len, node_index, *key).0;
                 continue;
+            } else {
+                return None;
             }
         }
     }
@@ -394,6 +398,8 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
             if shared_prefix_len >= node.prefix_len {
                 node_index = self.get_child(node.prefix_len, node_index, key).0;
                 continue;
+            } else {
+                return SENTINEL;
             }
         }
     }
