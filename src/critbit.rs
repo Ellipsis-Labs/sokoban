@@ -120,6 +120,8 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
             if shared_prefix_len >= node.prefix_len {
                 node_index = self.get_child(node.prefix_len, node_index, *key).0;
                 continue;
+            } else {
+                return None;
             }
         }
     }
@@ -143,6 +145,8 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
             if shared_prefix_len >= node.prefix_len {
                 node_index = self.get_child(node.prefix_len, node_index, *key).0;
                 continue;
+            } else {
+                return None;
             }
         }
     }
@@ -394,6 +398,8 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
             if shared_prefix_len >= node.prefix_len {
                 node_index = self.get_child(node.prefix_len, node_index, key).0;
                 continue;
+            } else {
+                return SENTINEL;
             }
         }
     }
@@ -507,14 +513,20 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         if self.root == SENTINEL {
             CritbitIterator::<V, NUM_NODES, MAX_SIZE> {
                 tree: self,
-                stack: vec![],
+                fwd_stack: vec![],
+                fwd_node: None,
                 rev_stack: vec![],
+                rev_node: None,
+                terminated: false,
             }
         } else {
             CritbitIterator::<V, NUM_NODES, MAX_SIZE> {
                 tree: self,
-                stack: vec![self.root],
+                fwd_stack: vec![self.root],
+                fwd_node: None,
                 rev_stack: vec![self.root],
+                rev_node: None,
+                terminated: false,
             }
         }
     }
@@ -524,14 +536,20 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         if node == SENTINEL {
             CritbitIteratorMut::<V, NUM_NODES, MAX_SIZE> {
                 tree: self,
-                stack: vec![],
+                fwd_stack: vec![],
+                fwd_node: None,
                 rev_stack: vec![],
+                rev_node: None,
+                terminated: false,
             }
         } else {
             CritbitIteratorMut::<V, NUM_NODES, MAX_SIZE> {
                 tree: self,
-                stack: vec![node],
+                fwd_stack: vec![node],
+                fwd_node: None,
                 rev_stack: vec![node],
+                rev_node: None,
+                terminated: false,
             }
         }
     }
@@ -574,8 +592,11 @@ pub struct CritbitIterator<
     const MAX_SIZE: usize,
 > {
     tree: &'a Critbit<V, MAX_NODES, MAX_SIZE>,
-    stack: Vec<u32>,
+    fwd_stack: Vec<u32>,
+    fwd_node: Option<u32>,
     rev_stack: Vec<u32>,
+    rev_node: Option<u32>,
+    terminated: bool,
 }
 
 impl<
@@ -588,18 +609,23 @@ impl<
     type Item = (&'a u128, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while !self.stack.is_empty() {
-            let node = self.stack.pop();
+        while !self.terminated && !self.fwd_stack.is_empty() {
+            let node = self.fwd_stack.pop();
             match node {
                 Some(n) => {
                     if !self.tree.is_inner_node(n) {
                         let i = self.tree.get_leaf_index(n);
+                        if Some(i) == self.rev_node {
+                            self.terminated = true;
+                            return None;
+                        }
+                        self.fwd_node = Some(i);
                         let v = self.tree.get_leaf(i);
                         let k = self.tree.get_key(n);
                         return Some((k, v));
                     } else {
-                        self.stack.push(self.tree.get_right(n));
-                        self.stack.push(self.tree.get_left(n));
+                        self.fwd_stack.push(self.tree.get_right(n));
+                        self.fwd_stack.push(self.tree.get_left(n));
                     }
                 }
                 _ => return None,
@@ -617,12 +643,17 @@ impl<
     > DoubleEndedIterator for CritbitIterator<'a, V, MAX_NODES, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
-        while !self.rev_stack.is_empty() {
+        while !self.terminated && !self.rev_stack.is_empty() {
             let node = self.rev_stack.pop();
             match node {
                 Some(n) => {
                     if !self.tree.is_inner_node(n) {
                         let i = self.tree.get_leaf_index(n);
+                        if Some(i) == self.fwd_node {
+                            self.terminated = true;
+                            return None;
+                        }
+                        self.rev_node = Some(i);
                         let v = self.tree.get_leaf(i);
                         let k = self.tree.get_key(n);
                         return Some((k, v));
@@ -645,8 +676,11 @@ pub struct CritbitIteratorMut<
     const MAX_SIZE: usize,
 > {
     tree: &'a mut Critbit<V, MAX_NODES, MAX_SIZE>,
-    stack: Vec<u32>,
+    fwd_stack: Vec<u32>,
+    fwd_node: Option<u32>,
     rev_stack: Vec<u32>,
+    rev_node: Option<u32>,
+    terminated: bool,
 }
 
 impl<
@@ -659,12 +693,17 @@ impl<
     type Item = (&'a u128, &'a mut V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while !self.stack.is_empty() {
-            let node = self.stack.pop();
+        while !self.terminated && !self.fwd_stack.is_empty() {
+            let node = self.fwd_stack.pop();
             match node {
                 Some(n) => {
                     if !self.tree.is_inner_node(n) {
                         let i = self.tree.get_leaf_index(n);
+                        if Some(i) == self.rev_node {
+                            self.terminated = true;
+                            return None;
+                        }
+                        self.fwd_node = Some(i);
                         unsafe {
                             let key = &(*self
                                 .tree
@@ -679,8 +718,8 @@ impl<
                             return Some((key, leaf));
                         }
                     } else {
-                        self.stack.push(self.tree.get_right(n));
-                        self.stack.push(self.tree.get_left(n));
+                        self.fwd_stack.push(self.tree.get_right(n));
+                        self.fwd_stack.push(self.tree.get_left(n));
                     }
                 }
                 _ => return None,
@@ -698,12 +737,17 @@ impl<
     > DoubleEndedIterator for CritbitIteratorMut<'a, V, MAX_NODES, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
-        while !self.rev_stack.is_empty() {
+        while !self.terminated && !self.rev_stack.is_empty() {
             let node = self.rev_stack.pop();
             match node {
                 Some(n) => {
                     if !self.tree.is_inner_node(n) {
                         let i = self.tree.get_leaf_index(n);
+                        if Some(i) == self.fwd_node {
+                            self.terminated = true;
+                            return None;
+                        }
+                        self.rev_node = Some(i);
                         unsafe {
                             let key = &(*self
                                 .tree

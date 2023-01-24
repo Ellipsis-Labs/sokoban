@@ -1,4 +1,7 @@
-use crate::node_allocator::{NodeAllocator, ZeroCopy, SENTINEL};
+use crate::{
+    node_allocator::{NodeAllocator, ZeroCopy, SENTINEL},
+    FromSlice,
+};
 use bytemuck::{Pod, Zeroable};
 
 // Register aliases
@@ -28,6 +31,16 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> ZeroCopy
 {
 }
 
+impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> FromSlice
+    for Deque<T, MAX_SIZE>
+{
+    fn new_from_slice(slice: &mut [u8]) -> &mut Self {
+        let deque = Self::load_mut_bytes(slice).unwrap();
+        deque.initialize();
+        deque
+    }
+}
+
 impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Default
     for Deque<T, MAX_SIZE>
 {
@@ -44,6 +57,10 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Default
 impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T, MAX_SIZE> {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn initialize(&mut self) {
+        self.allocator.initialize();
     }
 
     pub fn front(&self) -> Option<&T> {
@@ -97,33 +114,27 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         self.sequence_number += 1;
     }
 
-    pub fn pop_front(&mut self) -> Option<&T> {
+    pub fn pop_front(&mut self) -> Option<T> {
         if self.head == SENTINEL {
             return None;
         }
-        let new_head = self.get_next(self.head);
-        let res = self.allocator.remove_node(self.head).unwrap();
-        self.head = new_head;
-        self.sequence_number += 1;
-        Some(res)
+        let head = self.head;
+        self._remove(head)
     }
 
-    pub fn pop_back(&mut self) -> Option<&T> {
+    pub fn pop_back(&mut self) -> Option<T> {
         if self.tail == SENTINEL {
             return None;
         }
-        let new_tail = self.get_prev(self.tail);
-        let res = self.allocator.remove_node(self.tail).unwrap();
-        self.tail = new_tail;
-        self.sequence_number += 1;
-        Some(res)
+        let tail = self.tail;
+        self._remove(tail)
     }
 
-    pub fn remove(&mut self, i: usize) -> Option<T> {
+    fn _remove(&mut self, i: u32) -> Option<T> {
         let (left, right, value) = {
-            let value = *self.get_node(i as u32);
-            let left = self.get_prev(i as u32);
-            let right = self.get_next(i as u32);
+            let value = *self.get_node(i);
+            let left = self.get_prev(i);
+            let right = self.get_next(i);
             (left, right, value)
         };
         self.allocator.clear_register(i as u32, PREV);
@@ -131,11 +142,11 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         if left != SENTINEL && right != SENTINEL {
             self.allocator.connect(left, right, NEXT, PREV);
         }
-        if i == self.head as usize {
+        if i == self.head {
             self.head = right;
             self.allocator.clear_register(right, PREV);
         }
-        if i == self.tail as usize {
+        if i == self.tail {
             self.tail = left;
             self.allocator.clear_register(left, NEXT);
         }
@@ -155,22 +166,29 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
     pub fn iter(&self) -> DequeIterator<'_, T, MAX_SIZE> {
         DequeIterator::<T, MAX_SIZE> {
             deque: self,
-            ptr: self.head,
+            fwd_ptr: self.head,
+            rev_ptr: self.tail,
+            terminated: false,
         }
     }
 
     pub fn iter_mut(&mut self) -> DequeIteratorMut<'_, T, MAX_SIZE> {
         let head = self.head;
+        let tail = self.tail;
         DequeIteratorMut::<T, MAX_SIZE> {
             deque: self,
-            ptr: head,
+            fwd_ptr: head,
+            rev_ptr: tail,
+            terminated: false,
         }
     }
 }
 
 pub struct DequeIterator<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> {
     deque: &'a Deque<T, MAX_SIZE>,
-    ptr: u32,
+    fwd_ptr: u32,
+    rev_ptr: u32,
+    terminated: bool,
 }
 
 impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iterator
@@ -179,11 +197,38 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iter
     type Item = (usize, &'a T);
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.ptr {
+        if self.terminated {
+            return None;
+        }
+        match self.fwd_ptr {
             SENTINEL => None,
             _ => {
-                let ptr = self.ptr;
-                self.ptr = self.deque.get_next(ptr);
+                let ptr = self.fwd_ptr;
+                if ptr == self.rev_ptr {
+                    self.terminated = true;
+                }
+                self.fwd_ptr = self.deque.get_next(ptr);
+                Some((ptr as usize, self.deque.get_node(ptr)))
+            }
+        }
+    }
+}
+
+impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> DoubleEndedIterator
+    for DequeIterator<'a, T, MAX_SIZE>
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.terminated {
+            return None;
+        }
+        match self.rev_ptr {
+            SENTINEL => None,
+            _ => {
+                let ptr = self.rev_ptr;
+                if ptr == self.fwd_ptr {
+                    self.terminated = true;
+                }
+                self.rev_ptr = self.deque.get_prev(ptr);
                 Some((ptr as usize, self.deque.get_node(ptr)))
             }
         }
@@ -192,7 +237,9 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iter
 
 pub struct DequeIteratorMut<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> {
     deque: &'a mut Deque<T, MAX_SIZE>,
-    ptr: u32,
+    fwd_ptr: u32,
+    rev_ptr: u32,
+    terminated: bool,
 }
 
 impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iterator
@@ -201,11 +248,17 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iter
     type Item = (usize, &'a mut T);
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.ptr {
+        if self.terminated {
+            return None;
+        }
+        match self.fwd_ptr {
             SENTINEL => None,
             _ => {
-                let ptr = self.ptr;
-                self.ptr = self.deque.get_next(ptr);
+                let ptr = self.fwd_ptr;
+                if ptr == self.rev_ptr {
+                    self.terminated = true;
+                }
+                self.fwd_ptr = self.deque.get_next(ptr);
                 Some((ptr as usize, unsafe {
                     (*self
                         .deque
@@ -218,4 +271,131 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iter
             }
         }
     }
+}
+
+impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> DoubleEndedIterator
+    for DequeIteratorMut<'a, T, MAX_SIZE>
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.terminated {
+            return None;
+        }
+        match self.rev_ptr {
+            SENTINEL => None,
+            _ => {
+                let ptr = self.rev_ptr;
+                if ptr == self.fwd_ptr {
+                    self.terminated = true;
+                }
+                self.rev_ptr = self.deque.get_prev(ptr);
+                Some((ptr as usize, unsafe {
+                    (*self
+                        .deque
+                        .allocator
+                        .nodes
+                        .as_mut_ptr()
+                        .add((ptr - 1) as usize))
+                    .get_value_mut()
+                }))
+            }
+        }
+    }
+}
+
+#[test]
+/// This test covers the primary use cases of the deque
+fn test_deque() {
+    use rand::thread_rng;
+    use rand::Rng;
+    use std::collections::VecDeque;
+    let mut rng = thread_rng();
+    type Q = Deque<u64, 1024>;
+    let mut buf = vec![0u8; std::mem::size_of::<Q>()];
+    let mut v = VecDeque::new();
+    let q = Q::new_from_slice(buf.as_mut_slice());
+    (0..128).for_each(|_| {
+        let t = rng.gen::<u64>();
+        q.push_back(t);
+        v.push_back(t);
+    });
+    (0..128).for_each(|_| {
+        let t = rng.gen::<u64>();
+        q.push_front(t);
+        v.push_front(t);
+    });
+    for ((_, i), j) in q.iter().zip(v.iter()) {
+        assert_eq!(i, j);
+    }
+    for ((_, i), j) in q.iter().rev().zip(v.iter().rev()) {
+        assert_eq!(i, j);
+    }
+
+    {
+        let mut q_iter = q.iter();
+        let mut v_iter = v.iter();
+        let breakpoint = rng.gen_range(1, 255);
+        for _ in 0..breakpoint {
+            assert_eq!(q_iter.next().map(|x| x.1), v_iter.next());
+        }
+        for _ in breakpoint..256 {
+            assert_eq!(q_iter.next_back().map(|x| x.1), v_iter.next_back());
+        }
+
+        assert!(q_iter.next().is_none());
+        assert!(q_iter.next_back().is_none());
+        assert!(v_iter.next().is_none());
+        assert!(v_iter.next_back().is_none());
+        // Do it again for good measure
+        assert!(q_iter.next().is_none());
+        assert!(q_iter.next_back().is_none());
+        assert!(v_iter.next().is_none());
+        assert!(v_iter.next_back().is_none());
+    }
+
+    {
+        let mut q_iter_mut = q.iter_mut();
+        let mut v_iter_mut = v.iter_mut();
+        let breakpoint = rng.gen_range(1, 255);
+        for _ in 0..breakpoint {
+            assert_eq!(q_iter_mut.next().map(|x| x.1), v_iter_mut.next());
+        }
+        for _ in breakpoint..256 {
+            assert_eq!(q_iter_mut.next_back().map(|x| x.1), v_iter_mut.next_back());
+        }
+
+        assert!(q_iter_mut.next().is_none());
+        assert!(q_iter_mut.next_back().is_none());
+        assert!(v_iter_mut.next().is_none());
+        assert!(v_iter_mut.next_back().is_none());
+        // Do it again for good measure
+        assert!(q_iter_mut.next().is_none());
+        assert!(q_iter_mut.next_back().is_none());
+        assert!(v_iter_mut.next().is_none());
+        assert!(v_iter_mut.next_back().is_none());
+    }
+
+    (0..256).for_each(|_| {
+        assert_eq!(q.pop_back(), v.pop_back());
+    });
+    assert!(q.is_empty() && v.is_empty());
+    (0..128).for_each(|_| {
+        let t = rng.gen::<u64>();
+        q.push_back(t);
+        v.push_back(t);
+    });
+    (0..128).for_each(|_| {
+        let t = rng.gen::<u64>();
+        q.push_front(t);
+        v.push_front(t);
+    });
+    for ((_, i), j) in q.iter().zip(v.iter()) {
+        assert_eq!(i, j);
+    }
+    for ((_, i), j) in q.iter().rev().zip(v.iter().rev()) {
+        assert_eq!(i, j);
+    }
+    (0..256).for_each(|_| {
+        assert_eq!(q.pop_front(), v.pop_front());
+    });
+    assert!(q.is_empty() && v.is_empty());
 }

@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 const MAX_SIZE: usize = 20000;
 
 #[repr(C)]
-#[derive(Default, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
 struct Widget {
     a: u128,
     b: u128,
@@ -37,7 +37,7 @@ impl Widget {
     }
 }
 
-fn simulate<K: Clone + Copy + Zeroable + Pod + Ord, T>(expect_sorted: bool)
+fn simulate<K: std::fmt::Debug + Clone + Copy + Zeroable + Pod + Ord, T>(expect_sorted: bool)
 where
     T: Copy + FromSlice + NodeAllocatorMap<K, Widget>,
     Standard: Distribution<K>,
@@ -160,6 +160,93 @@ where
         for ((k1, v1), (k2, v2)) in new_map.iter().rev().zip(tree.iter().rev()) {
             assert!(*k1 == *k2);
             assert!(*v1 == *v2);
+        }
+
+        // Test double ended iterator
+        {
+            let mut node_allocator_iter = tree.iter();
+            let mut btree_map_iter = new_map.iter();
+            let breakpoint = rng.gen_range(1, new_map.len() - 1);
+
+            for _ in 0..breakpoint {
+                let a = node_allocator_iter.next();
+                let b = btree_map_iter.next();
+                assert!(a.is_some() && b.is_some());
+                assert_eq!(a, b);
+            }
+            for _ in breakpoint..new_map.len() {
+                let a = node_allocator_iter.next_back();
+                let b = btree_map_iter.next_back();
+                assert!(a.is_some() && b.is_some());
+                assert_eq!(a, b);
+            }
+
+            assert!(node_allocator_iter.next().is_none());
+            assert!(node_allocator_iter.next_back().is_none());
+            assert!(btree_map_iter.next().is_none());
+            assert!(btree_map_iter.next_back().is_none());
+            // Do it again for good measure
+            assert!(node_allocator_iter.next().is_none());
+            assert!(node_allocator_iter.next_back().is_none());
+            assert!(btree_map_iter.next().is_none());
+            assert!(btree_map_iter.next_back().is_none());
+        }
+        // Test iterator can't be used again after consumed
+        {
+            let mut node_allocator_iter = tree.iter();
+            for _ in 0..tree.len() {
+                assert!(node_allocator_iter.next().is_some());
+            }
+            assert!(node_allocator_iter.next().is_none());
+            assert!(node_allocator_iter.next_back().is_none());
+            assert!(node_allocator_iter.next().is_none());
+            assert!(node_allocator_iter.next_back().is_none());
+            let mut node_allocator_iter = tree.iter();
+
+            for _ in 0..tree.len() {
+                assert!(node_allocator_iter.next_back().is_some());
+            }
+            assert!(node_allocator_iter.next_back().is_none());
+            assert!(node_allocator_iter.next().is_none());
+            assert!(node_allocator_iter.next_back().is_none());
+            assert!(node_allocator_iter.next().is_none());
+        }
+
+        // Test double ended iterator mut
+        {
+            let len = new_map.len();
+            let mut node_allocator_iter_mut = tree.iter_mut();
+            let mut btree_map_iter_mut = new_map.iter_mut();
+            let breakpoint = rng.gen_range(1, len - 1);
+
+            for _ in 0..breakpoint {
+                let a = node_allocator_iter_mut.next();
+                let b = btree_map_iter_mut.next();
+                assert!(a.is_some() && b.is_some());
+                assert_eq!(a, b);
+                let w = Widget::new_random(&mut rng);
+                *a.unwrap().1 = w;
+                *b.unwrap().1 = w;
+            }
+            for _ in breakpoint..len {
+                let a = node_allocator_iter_mut.next_back();
+                let b = btree_map_iter_mut.next_back();
+                assert!(a.is_some() && b.is_some());
+                assert_eq!(a, b);
+                let w = Widget::new_random(&mut rng);
+                *a.unwrap().1 = w;
+                *b.unwrap().1 = w;
+            }
+
+            assert!(node_allocator_iter_mut.next().is_none());
+            assert!(node_allocator_iter_mut.next_back().is_none());
+            assert!(btree_map_iter_mut.next().is_none());
+            assert!(btree_map_iter_mut.next_back().is_none());
+            // Do it again for good measure
+            assert!(node_allocator_iter_mut.next().is_none());
+            assert!(node_allocator_iter_mut.next_back().is_none());
+            assert!(btree_map_iter_mut.next().is_none());
+            assert!(btree_map_iter_mut.next_back().is_none());
         }
     } else {
         for ((k1, v1), (k2, v2)) in new_map.iter().zip(tree.iter().sorted()) {
