@@ -2,10 +2,6 @@
 
 Compact, efficient data structures in contiguous byte arrays.
 
-## DISCLAIMER
-
-This is unaudited code, and still very rough around the edges. Proceed with caution before using any of these data structures in a production system.
-
 ### Benchmarks
 
 Based on simple benchmarks, the naive performance of Sokoban data structures are on par with, but slightly slower than, the Rust Standard Library.
