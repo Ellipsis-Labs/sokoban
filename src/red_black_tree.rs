@@ -593,7 +593,7 @@ impl<
                     parent_and_dir = Some((max_left_parent, Field::Right as u32));
                 }
             } else if max_left_child == SENTINEL {
-                // The only time this is called is is when the left subtree is
+                // The only time this is called is when the left subtree is
                 // a single node
                 assert!(self.is_leaf(max_left));
                 parent_and_dir = Some((max_left, Field::Left as u32));
