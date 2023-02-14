@@ -1,6 +1,6 @@
 [package]
 name = "lib-sokoban"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 repository = "https://github.com/jarry-xiao/sokoban"
 authors = ["jarry-xiao <jarry.xiao@gmail.com>"]
@@ -21,10 +21,10 @@ crate-type = ["lib"]
 required-features = []
 
 [dependencies]
-bytemuck = "1.11.0"
-thiserror = "1.0.30"
-num-derive = "0.3.3"
-num-traits = "0.2.15"
+bytemuck = "=1.13.0"
+thiserror = "=1.0.38"
+num-derive = "=0.3.3"
+num-traits = "=0.2.15"
 
 [dev-dependencies]
 rand_distr = "0.4.3"
