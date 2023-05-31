@@ -279,7 +279,7 @@ impl<
         i
     }
 
-    /// Removes the node at index `i` from the alloctor and adds the index to the free list
+    /// Removes the node at index `i` from the allocator and adds the index to the free list
     /// When deleting nodes, you MUST clear all registers prior to calling `remove_node`
     pub fn remove_node(&mut self, i: u32) -> Option<&T> {
         if i == SENTINEL {
