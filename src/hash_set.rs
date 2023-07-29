@@ -117,9 +117,7 @@ impl<V: Copy + Clone + Default + Hash + PartialEq + Pod + Zeroable, const MAX_SI
 
     #[inline(always)]
     fn set_field(&mut self, node: u32, register: Field, value: u32) {
-        if node != SENTINEL {
-            self.allocator.set_register(node, value, register as u32);
-        }
+        self.allocator.set_register(node, value, register as u32);
     }
 
     #[inline(always)]
