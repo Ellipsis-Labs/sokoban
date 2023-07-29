@@ -10,8 +10,8 @@ mod bench_tests {
     use sokoban::node_allocator::FromSlice;
     use sokoban::node_allocator::NodeAllocatorMap;
     use sokoban::*;
-    use std::collections::BTreeMap;
     use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashSet as StdHashSet};
     use test::Bencher;
 
     const MAX_SIZE: usize = 20001;
@@ -108,6 +108,17 @@ mod bench_tests {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; std::mem::size_of::<SHashSet1k>()];
         let s = SHashSet1k::new_from_slice(buf.as_mut_slice());
+        b.iter(|| {
+            for _ in 0..1000 {
+                s.insert(rng.gen::<u128>());
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_std_hash_set_insert_1000_u128(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut s = StdHashSet::<u128>::new();
         b.iter(|| {
             for _ in 0..1000 {
                 s.insert(rng.gen::<u128>());
@@ -253,6 +264,17 @@ mod bench_tests {
     }
 
     #[bench]
+    fn bench_std_hash_set_insert_20000_u128(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut s = StdHashSet::<u128>::new();
+        b.iter(|| {
+            for _ in 0..20000 {
+                s.insert(rng.gen::<u128>());
+            }
+        })
+    }
+
+    #[bench]
     fn bench_std_btree_map_remove_1000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut m = BTreeMap::new();
@@ -370,6 +392,22 @@ mod bench_tests {
     }
 
     #[bench]
+    fn bench_std_hash_set_remove_1000_u128(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut s = StdHashSet::<u128>::new();
+        let mut slice: Vec<u128> = (0..1000).collect();
+        slice.shuffle(&mut rng);
+        for _ in 0..1000 {
+            s.insert(rng.gen::<u128>());
+        }
+        b.iter(|| {
+            for k in slice.iter() {
+                s.remove(k);
+            }
+        })
+    }
+
+    #[bench]
     fn bench_std_btree_map_lookup_20000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut m = BTreeMap::new();
@@ -461,6 +499,19 @@ mod bench_tests {
     fn bench_sokoban_hash_set_lookup_20000_u128(b: &mut Bencher) {
         let mut buf = vec![0u8; std::mem::size_of::<SHashSet>()];
         let s = SHashSet::new_from_slice(buf.as_mut_slice());
+        for v in 0..20000 {
+            s.insert(v);
+        }
+        b.iter(|| {
+            for v in 0..20000 {
+                s.contains(&v);
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_std_hash_set_lookup_20000_u128(b: &mut Bencher) {
+        let mut s = StdHashSet::<u128>::new();
         for v in 0..20000 {
             s.insert(v);
         }
