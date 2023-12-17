@@ -735,6 +735,32 @@ impl<
             terminated: false,
         }
     }
+
+    pub fn filter<'a, P: for<'p> Fn(&'p K, &'p V) -> bool>(
+        &'a mut self,
+        predicate: P,
+    ) -> Vec<(K, V)> {
+        self.drain_filter(predicate).collect::<Vec<_>>()
+    }
+
+    pub fn drain_filter<'a, P: for<'p> Fn(&'p K, &'p V) -> bool>(
+        &'a mut self,
+        predicate: P,
+    ) -> RedBlackTreeDrainFilter<'a, K, V, P, MAX_SIZE> {
+        let node = self.root;
+        RedBlackTreeDrainFilter {
+            tree: self,
+            fwd_stack: vec![],
+            fwd_ptr: node,
+            fwd_node: None,
+            _rev_stack: vec![],
+            _rev_ptr: node,
+            rev_node: None,
+            terminated: false,
+            remove: vec![],
+            predicate,
+        }
+    }
 }
 
 impl<
@@ -929,6 +955,93 @@ impl<
                 }
             }
         }
+        None
+    }
+}
+
+pub struct RedBlackTreeDrainFilter<
+    'a,
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    P: for<'p> Fn(&'p K, &'p V) -> bool,
+    const MAX_SIZE: usize,
+> {
+    tree: &'a mut RedBlackTree<K, V, MAX_SIZE>,
+    fwd_stack: Vec<u32>,
+    fwd_ptr: u32,
+    fwd_node: Option<u32>,
+    _rev_stack: Vec<u32>,
+    _rev_ptr: u32,
+    rev_node: Option<u32>,
+    terminated: bool,
+    /// Keeps addr's of nodes with predicate = true, to remove upon dropping.
+    /// It is possible to instead drop during iteration and update fwd_ptr & fwd_stack
+    remove: Vec<u32>,
+    predicate: P,
+}
+
+impl<
+        'a,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        P: for<'p> Fn(&'p K, &'p V) -> bool,
+        const MAX_SIZE: usize,
+    > Drop for RedBlackTreeDrainFilter<'a, K, V, P, MAX_SIZE>
+{
+    fn drop(&mut self) {
+        for node_index in core::mem::take(&mut self.remove) {
+            self.tree._remove_tree_node(node_index);
+        }
+    }
+}
+
+impl<
+        'a,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        P: for<'p> Fn(&'p K, &'p V) -> bool,
+        const MAX_SIZE: usize,
+    > Iterator for RedBlackTreeDrainFilter<'a, K, V, P, MAX_SIZE>
+{
+    type Item = (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.terminated && (!self.fwd_stack.is_empty() || self.fwd_ptr != SENTINEL) {
+            if self.fwd_ptr != SENTINEL {
+                self.fwd_stack.push(self.fwd_ptr);
+                self.fwd_ptr = self.tree.get_left(self.fwd_ptr);
+            } else {
+                let current_node = self.fwd_stack.pop();
+                if current_node == self.rev_node {
+                    self.terminated = true;
+                    return None;
+                }
+                self.fwd_node = current_node;
+                let ptr = self.fwd_node.unwrap();
+
+                // Get node, check predicate.
+                // If predicate, remove and return
+                let node = self
+                    .tree
+                    .allocator
+                    .nodes
+                    .get((ptr - 1) as usize)
+                    .unwrap()
+                    .get_value();
+
+                if (self.predicate)(&node.key, &node.value) {
+                    let (key, value) = (node.key, node.value);
+                    self.fwd_ptr = self.tree.get_right(ptr);
+                    self.remove.push(ptr);
+
+                    // Remove and return
+                    return Some((key, value));
+                } else {
+                    self.fwd_ptr = self.tree.get_right(ptr);
+                }
+            }
+        }
+
         None
     }
 }
