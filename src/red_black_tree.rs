@@ -1068,15 +1068,9 @@ impl<
                 let ptr = self.fwd_node.unwrap();
 
                 // Get node, check predicate.
-                // If predicate, remove and return
-                let node = self
-                    .tree
-                    .allocator
-                    .nodes
-                    .get((ptr - 1) as usize)
-                    .unwrap()
-                    .get_value();
+                let node = self.tree.get_node(ptr);
 
+                // If predicate, remove and return
                 if (self.predicate)(&node.key, &node.value) {
                     let (key, value) = (node.key, node.value);
                     self.fwd_ptr = self.tree.get_right(ptr);
