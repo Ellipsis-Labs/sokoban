@@ -103,7 +103,7 @@ fn main() {
         // Start filter
         let timer = Instant::now();
         drop(
-            tree.drain_filter(
+            tree.extract_if(
                 #[inline(always)]
                 |_k, v| v.maker == TARGET_MAKER,
             )
@@ -114,7 +114,7 @@ fn main() {
         }
         assert_eq!(tree.len(), TREE_SIZE - REMOVE);
     }
-    println!("average drain_alloc: {total_drain_alloc_micros} micros");
+    println!("average extract_if_alloc: {total_drain_alloc_micros} micros");
 
     let mut total_drain_micros = 0;
     for i in 0..ITERS + WARMUP_ITERS {
@@ -130,7 +130,7 @@ fn main() {
 
         // Start filter
         let timer = Instant::now();
-        for _x in tree.drain_filter(
+        for _x in tree.extract_if(
             #[inline(always)]
             |_k, v| v.maker == TARGET_MAKER,
         ) {}
@@ -139,5 +139,5 @@ fn main() {
         }
         assert_eq!(tree.len(), 4096 - REMOVE);
     }
-    println!("average drain: {total_drain_micros} micros");
+    println!("average extract_if: {total_drain_micros} micros");
 }
