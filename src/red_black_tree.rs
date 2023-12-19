@@ -735,6 +735,80 @@ impl<
             terminated: false,
         }
     }
+
+    /// Returns an `Iterator` that selectively removes and returns items
+    /// from the tree where the given predicate evaluates to `true`.
+    ///
+    /// Recall that iterators are lazy. If the iterator is dropped before
+    /// iterating through the entire tree, not all items where the given
+    /// predicate would evaluate to `true` will be removed. Note that this
+    /// can be used to remove up to some number of entries from the tree.
+    ///
+    /// Example:
+    /// ```rust
+    /// use sokoban::{RedBlackTree, NodeAllocatorMap};
+    /// let mut tree = RedBlackTree::<u32, u32, 8>::new();
+    ///
+    /// // Remove if key or value is zero
+    /// let predicate = {
+    ///     #[inline(always)]
+    ///     |k: &u32, v: &u32| (*k == 0) | (*v == 0)
+    /// };
+    /// tree.insert(0, 5); // Key is zero
+    /// tree.insert(1, 5);
+    /// tree.insert(2, 0); // Value is zero
+    /// tree.insert(3, 5);
+    /// tree.insert(4, 0); // Value is zero
+    /// tree.insert(5, 5);
+    /// tree.insert(6, 5);
+    /// tree.insert(7, 0); // Value is zero
+    ///
+    /// for x in tree.extract_if(predicate) {
+    ///     println!("removed node {} {}", x.0, x.1);
+    /// }
+    ///
+    /// // After removing all pairs with a zero key or value
+    /// // these should be the remaining elements
+    /// let remaining = [
+    ///     (&1, &5),
+    ///     (&3, &5),
+    ///     (&5, &5),
+    ///     (&6, &5),
+    /// ];
+    /// assert!(Iterator::eq(tree.iter(), remaining.into_iter()));
+    ///
+    /// // Remove if value is 5 (all elements), removing up to 2 entries
+    /// let predicate = {
+    ///     #[inline(always)]
+    ///     |_k: &u32, v: &u32| (*v == 5)
+    /// };
+    /// for x in tree.extract_if(predicate).take(2) {
+    ///     println!("removed node {} {}", x.0, x.1);
+    /// }
+    /// let remaining = [
+    ///     (&5, &5),
+    ///     (&6, &5),
+    /// ];
+    /// assert!(Iterator::eq(tree.iter(), remaining.into_iter()));
+    /// ```
+    pub fn extract_if<'a, P: for<'p> Fn(&'p K, &'p V) -> bool>(
+        &'a mut self,
+        predicate: P,
+    ) -> RedBlackTreeExtractIf<'a, K, V, P, MAX_SIZE> {
+        let node = self.root;
+        RedBlackTreeExtractIf {
+            tree: self,
+            fwd_stack: vec![],
+            fwd_ptr: node,
+            fwd_node: None,
+            _rev_stack: vec![],
+            _rev_ptr: node,
+            rev_node: None,
+            terminated: false,
+            remove: vec![],
+            predicate,
+        }
+    }
 }
 
 impl<
@@ -929,6 +1003,87 @@ impl<
                 }
             }
         }
+        None
+    }
+}
+
+pub struct RedBlackTreeExtractIf<
+    'a,
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    P: for<'p> Fn(&'p K, &'p V) -> bool,
+    const MAX_SIZE: usize,
+> {
+    tree: &'a mut RedBlackTree<K, V, MAX_SIZE>,
+    fwd_stack: Vec<u32>,
+    fwd_ptr: u32,
+    fwd_node: Option<u32>,
+    _rev_stack: Vec<u32>,
+    _rev_ptr: u32,
+    rev_node: Option<u32>,
+    terminated: bool,
+    /// Keeps addr's of nodes with predicate = true, to remove upon dropping.
+    /// It is possible to instead drop during iteration and update fwd_ptr & fwd_stack
+    remove: Vec<u32>,
+    predicate: P,
+}
+
+impl<
+        'a,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        P: for<'p> Fn(&'p K, &'p V) -> bool,
+        const MAX_SIZE: usize,
+    > Drop for RedBlackTreeExtractIf<'a, K, V, P, MAX_SIZE>
+{
+    fn drop(&mut self) {
+        for node_index in core::mem::take(&mut self.remove) {
+            self.tree._remove_tree_node(node_index);
+        }
+    }
+}
+
+impl<
+        'a,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        P: for<'p> Fn(&'p K, &'p V) -> bool,
+        const MAX_SIZE: usize,
+    > Iterator for RedBlackTreeExtractIf<'a, K, V, P, MAX_SIZE>
+{
+    type Item = (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.terminated && (!self.fwd_stack.is_empty() || self.fwd_ptr != SENTINEL) {
+            if self.fwd_ptr != SENTINEL {
+                self.fwd_stack.push(self.fwd_ptr);
+                self.fwd_ptr = self.tree.get_left(self.fwd_ptr);
+            } else {
+                let current_node = self.fwd_stack.pop();
+                if current_node == self.rev_node {
+                    self.terminated = true;
+                    return None;
+                }
+                self.fwd_node = current_node;
+                let ptr = self.fwd_node.unwrap();
+
+                // Get node, check predicate.
+                let node = self.tree.get_node(ptr);
+
+                // If predicate, remove and return
+                if (self.predicate)(&node.key, &node.value) {
+                    let (key, value) = (node.key, node.value);
+                    self.fwd_ptr = self.tree.get_right(ptr);
+                    self.remove.push(ptr);
+
+                    // Remove and return
+                    return Some((key, value));
+                } else {
+                    self.fwd_ptr = self.tree.get_right(ptr);
+                }
+            }
+        }
+
         None
     }
 }
