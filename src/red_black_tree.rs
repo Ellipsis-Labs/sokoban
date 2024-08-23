@@ -401,6 +401,18 @@ impl<
         self.allocator.get_register(node, Field::Parent as u32)
     }
 
+    pub fn remove_root(&mut self) -> Option<RBNode<K, V>> {
+        if self.root == SENTINEL {
+            // If the tree is empty, there is no root to remove
+            None
+        } else {
+            // Otherwise copy out and remove tree node
+            let root_node = self.get_node(self.root).clone();
+            self._remove_tree_node(self.root);
+            Some(root_node)
+        }
+    }
+
     fn _remove_allocator_node(&mut self, node: u32) {
         // Clear all registers
         self.allocator.clear_register(node, Field::Parent as u32);
@@ -1351,4 +1363,23 @@ fn test_delete_multiple_random_4098() {
         tree.remove(i).unwrap();
         assert!(tree.is_valid_red_black_tree());
     }
+}
+
+#[test]
+fn remove_root() {
+    type Rbt = RedBlackTree<u64, u64, 4098>;
+    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
+
+    // Returns none when empty
+    assert!(tree.remove_root().is_none());
+
+    tree._insert(1, 5);
+    tree._insert(2, 0);
+    tree._insert(0, 4);
+
+    // balanced tree should have 1 as root
+    let root = tree.remove_root().unwrap();
+    assert_eq!(root.key, 1);
+    assert_eq!(root.value, 5);
 }
