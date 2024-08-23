@@ -1364,3 +1364,22 @@ fn test_delete_multiple_random_4098() {
         assert!(tree.is_valid_red_black_tree());
     }
 }
+
+#[test]
+fn remove_root() {
+    type Rbt = RedBlackTree<u64, u64, 4098>;
+    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
+
+    // Returns none when empty
+    assert!(tree.remove_root().is_none());
+
+    tree._insert(1, 5);
+    tree._insert(2, 0);
+    tree._insert(0, 4);
+
+    // balanced tree should have 1 as root
+    let root = tree.remove_root().unwrap();
+    assert_eq!(root.key, 1);
+    assert_eq!(root.value, 5);
+}
