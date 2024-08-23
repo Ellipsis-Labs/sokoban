@@ -401,6 +401,18 @@ impl<
         self.allocator.get_register(node, Field::Parent as u32)
     }
 
+    pub fn remove_root(&mut self) -> Option<RBNode<K, V>> {
+        if self.root == SENTINEL {
+            // If the tree is empty, there is no root to remove
+            None
+        } else {
+            // Otherwise copy out and remove tree node
+            let root_node = self.get_node(self.root).clone();
+            self._remove_tree_node(self.root);
+            Some(root_node)
+        }
+    }
+
     fn _remove_allocator_node(&mut self, node: u32) {
         // Clear all registers
         self.allocator.clear_register(node, Field::Parent as u32);
