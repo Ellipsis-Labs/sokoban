@@ -114,6 +114,24 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         self.sequence_number += 1;
     }
 
+    pub fn try_push_back(&mut self, node: T) -> Result<(), &'static str> {
+        if self.len() < MAX_SIZE {
+            self.push_back(node);
+            Ok(())
+        } else {
+            Err("Deque::try_push_back failed. Deque is at max capacity.")
+        }
+    }
+
+    pub fn try_push_front(&mut self, node: T) -> Result<(), &'static str> {
+        if self.len() < MAX_SIZE {
+            self.push_front(node);
+            Ok(())
+        } else {
+            Err("Deque::try_push_front failed. Deque is at max capacity.")
+        }
+    }
+
     pub fn pop_front(&mut self) -> Option<T> {
         if self.head == SENTINEL {
             return None;
