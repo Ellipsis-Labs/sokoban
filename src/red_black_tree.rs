@@ -322,6 +322,7 @@ impl<
         self.allocator.initialize();
     }
 
+    #[inline(always)]
     pub fn get_node(&self, node: u32) -> &RBNode<K, V> {
         self.allocator.get(node).get_value()
     }
@@ -810,7 +811,7 @@ impl<
         // `start_bound`, pushing the path onto `stack`.  
         // This removes the need for the iterator’s first `next()` calls to
         // revisit nodes that are definitely out of range.
-        let mut stack = Vec::new();
+        let mut stack = Vec::with_capacity(32);
         let mut current = self.root;
 
         while current != SENTINEL {
@@ -1088,6 +1089,7 @@ impl<
     /// 4. Move to the right child and repeat
     ///
     /// This ensures O(1) amortized time per element and O(log n) space usage.
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             // Push left children onto stack
@@ -1097,37 +1099,42 @@ impl<
             }
 
             // Pop from stack
-            if let Some(node_index) = self.stack.pop() {
-                let node = self.tree.get_node(node_index);
-                let key = &node.key;
+            let node_index = self.stack.pop()?;
+            let node = self.tree.get_node(node_index);
+            let key = &node.key;
 
-                // Check if we're past the end bound
-                let past_end = match &self.end_bound {
-                    Bound::Included(end) => key > end,
-                    Bound::Excluded(end) => key >= end,
-                    Bound::Unbounded => false,
-                };
-
-                if past_end {
-                    return None;
+            // Early exit if we're past the end bound
+            match &self.end_bound {
+                Bound::Included(end) => {
+                    if key > end {
+                        return None;
+                    }
                 }
-
-                // Check if we're at or past the start bound
-                let at_start = match &self.start_bound {
-                    Bound::Included(start) => key >= start,
-                    Bound::Excluded(start) => key > start,
-                    Bound::Unbounded => true,
-                };
-
-                // Move to right child for next iteration
-                self.current = self.tree.get_right(node_index);
-
-                if at_start {
-                    return Some((key, &node.value));
+                Bound::Excluded(end) => {
+                    if key >= end {
+                        return None;
+                    }
                 }
-                // If not at start yet, continue to next node
-            } else {
-                return None;
+                Bound::Unbounded => {}
+            }
+
+            // Move to right child for next iteration
+            self.current = self.tree.get_right(node_index);
+
+            // Check if we're at or past the start bound
+            // Note: We already filtered out nodes before start during initialization
+            match &self.start_bound {
+                Bound::Unbounded => return Some((key, &node.value)),
+                Bound::Included(start) => {
+                    if key >= start {
+                        return Some((key, &node.value));
+                    }
+                }
+                Bound::Excluded(start) => {
+                    if key > start {
+                        return Some((key, &node.value));
+                    }
+                }
             }
         }
     }
