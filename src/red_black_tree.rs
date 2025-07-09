@@ -805,10 +805,40 @@ impl<
             Bound::Unbounded => Bound::Unbounded,
         };
 
+        // ---- Optimised seek to lower bound ----
+        // Walk from the root toward the first element that could satisfy
+        // `start_bound`, pushing the path onto `stack`.  
+        // This removes the need for the iterator’s first `next()` calls to
+        // revisit nodes that are definitely out of range.
+        let mut stack = Vec::new();
+        let mut current = self.root;
+
+        while current != SENTINEL {
+            let key = self.get_node(current).key;
+
+            // Is the current key strictly before our lower bound?
+            let before_start = match &start_bound {
+                Bound::Included(start) => key < *start,
+                Bound::Excluded(start) => key <= *start,
+                Bound::Unbounded       => false,
+            };
+
+            if before_start {
+                // Entire left subtree is out of range; go right.
+                current = self.get_right(current);
+            } else {
+                // Current node *may* be in range.  Push it and continue left
+                // to see if there’s an earlier candidate.
+                stack.push(current);
+                current = self.get_left(current);
+            }
+        }
+
         Range {
             tree: self,
-            stack: Vec::new(),
-            current: self.root,
+            stack,
+            // `current` is SENTINEL so `next()` will pop from `stack` first.
+            current: SENTINEL,
             start_bound,
             end_bound,
         }
