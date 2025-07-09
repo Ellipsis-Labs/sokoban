@@ -402,4 +402,77 @@ mod bench_tests {
             }
         })
     }
+
+    // ============== Range Iterator Benchmarks ==============
+
+    // Separate benchmarks for clarity
+    #[bench]
+    fn bench_std_btree_map_range_10_percent(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut m = BTreeMap::new();
+        for v in 0..10000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
+        b.iter(|| {
+            let sum: u128 = m.range(4500..5500).map(|(_, v)| v).sum();
+            test::black_box(sum);
+        })
+    }
+
+    #[bench]
+    fn bench_sokoban_red_black_tree_range_10_percent(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut buf = vec![0u8; std::mem::size_of::<RBTree>()];
+        let m = RBTree::new_from_slice(buf.as_mut_slice());
+        for v in 0..10000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
+        b.iter(|| {
+            let sum: u128 = m.range(4500..5500).map(|(_, v)| v).sum();
+            test::black_box(sum);
+        })
+    }
+
+    // Small range (100 elements)
+    #[bench]
+    fn bench_std_btree_map_range_small(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut m = BTreeMap::new();
+        for v in 0..10000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
+        b.iter(|| {
+            let sum: u128 = m.range(5000..5100).map(|(_, v)| v).sum();
+            test::black_box(sum);
+        })
+    }
+
+    #[bench]
+    fn bench_sokoban_red_black_tree_range_small(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut buf = vec![0u8; std::mem::size_of::<RBTree>()];
+        let m = RBTree::new_from_slice(buf.as_mut_slice());
+        for v in 0..10000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
+        b.iter(|| {
+            let sum: u128 = m.range(5000..5100).map(|(_, v)| v).sum();
+            test::black_box(sum);
+        })
+    }
+
+    // Empty range
+    #[bench]
+    fn bench_sokoban_red_black_tree_range_empty(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let mut buf = vec![0u8; std::mem::size_of::<RBTree>()];
+        let m = RBTree::new_from_slice(buf.as_mut_slice());
+        for v in 0..10000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
+        b.iter(|| {
+            let count = m.range(20000..30000).count();
+            test::black_box(count);
+        })
+    }
 }

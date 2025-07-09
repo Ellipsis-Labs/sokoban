@@ -4,7 +4,7 @@ use num_traits::FromPrimitive;
 use std::{
     cmp::Ordering,
     fmt::Debug,
-    ops::{Index, IndexMut},
+    ops::{Bound, Index, IndexMut, RangeBounds},
     vec,
 };
 
@@ -747,6 +747,72 @@ impl<
             terminated: false,
         }
     }
+
+    /// Returns an iterator over a sub-range of elements in the tree.
+    ///
+    /// The iterator yields all key-value pairs where the key is within the specified range,
+    /// in ascending order. The range bounds can be inclusive, exclusive, or unbounded.
+    ///
+    /// # Arguments
+    ///
+    /// * `range` - Any type that implements `RangeBounds<K>`, such as:
+    ///   - `a..b` - yields keys k where a <= k < b
+    ///   - `a..=b` - yields keys k where a <= k <= b
+    ///   - `..b` - yields keys k where k < b
+    ///   - `a..` - yields keys k where k >= a
+    ///   - `..` - yields all keys
+    ///   - `(Bound::Excluded(a), Bound::Included(b))` - yields keys k where a < k <= b
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use sokoban::{NodeAllocatorMap, RedBlackTree};
+    /// # use sokoban::node_allocator::FromSlice;
+    /// # let mut buf = vec![0u8; std::mem::size_of::<RedBlackTree<i32, &str, 100>>()];
+    /// # let tree = RedBlackTree::<i32, &str, 100>::new_from_slice(&mut buf);
+    /// for i in [1, 3, 5, 7, 9] {
+    ///     tree.insert(i, "value");
+    /// }
+    ///
+    /// // Iterate over range [3, 7)
+    /// let range: Vec<_> = tree.range(3..7).map(|(k, _)| *k).collect();
+    /// assert_eq!(range, vec![3, 5]);
+    ///
+    /// // Iterate over range [3, 7]
+    /// let range: Vec<_> = tree.range(3..=7).map(|(k, _)| *k).collect();
+    /// assert_eq!(range, vec![3, 5, 7]);
+    /// ```
+    ///
+    /// # Performance
+    ///
+    /// - Time complexity: O(log n + k) where n is the number of nodes and k is the number of yielded elements
+    /// - Space complexity: O(log n) for the internal stack
+    ///
+    /// The iterator performs an in-order traversal, visiting each node in the range exactly once.
+    pub fn range<R>(&self, range: R) -> Range<'_, K, V, MAX_SIZE>
+    where
+        R: RangeBounds<K>,
+    {
+        let start_bound = match range.start_bound() {
+            Bound::Included(k) => Bound::Included(*k),
+            Bound::Excluded(k) => Bound::Excluded(*k),
+            Bound::Unbounded => Bound::Unbounded,
+        };
+
+        let end_bound = match range.end_bound() {
+            Bound::Included(k) => Bound::Included(*k),
+            Bound::Excluded(k) => Bound::Excluded(*k),
+            Bound::Unbounded => Bound::Unbounded,
+        };
+
+        Range {
+            tree: self,
+            stack: Vec::new(),
+            current: self.root,
+            start_bound,
+            end_bound,
+        }
+    }
 }
 
 impl<
@@ -942,6 +1008,98 @@ impl<
             }
         }
         None
+    }
+}
+
+/// An iterator over a sub-range of entries in a `RedBlackTree`.
+///
+/// This struct is created by the [`range`] method on [`RedBlackTree`]. See its
+/// documentation for more details.
+///
+/// The iterator yields key-value pairs in ascending key order, visiting only
+/// nodes whose keys fall within the specified bounds.
+///
+/// [`range`]: RedBlackTree::range
+/// [`RedBlackTree`]: struct.RedBlackTree.html
+pub struct Range<
+    'a,
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    const MAX_SIZE: usize,
+> {
+    tree: &'a RedBlackTree<K, V, MAX_SIZE>,
+    stack: Vec<u32>,
+    current: u32,
+    start_bound: Bound<K>,
+    end_bound: Bound<K>,
+}
+
+impl<
+    'a,
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    const MAX_SIZE: usize,
+    > Iterator for Range<'a, K, V, MAX_SIZE>
+{
+    type Item = (&'a K, &'a V);
+
+    /// Advances the iterator and returns the next key-value pair within the range.
+    ///
+    /// Returns `None` when the iterator has finished, either because:
+    /// - All keys within the range have been yielded, or
+    /// - The next key in order would exceed the end bound
+    ///
+    /// # Implementation Details
+    ///
+    /// The iterator uses a stack-based in-order traversal algorithm:
+    /// 1. Push all left children onto the stack until reaching a leaf
+    /// 2. Pop a node from the stack and check if it's within bounds
+    /// 3. If within start bound, yield the key-value pair
+    /// 4. Move to the right child and repeat
+    ///
+    /// This ensures O(1) amortized time per element and O(log n) space usage.
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            // Push left children onto stack
+            while self.current != SENTINEL {
+                self.stack.push(self.current);
+                self.current = self.tree.get_left(self.current);
+            }
+
+            // Pop from stack
+            if let Some(node_index) = self.stack.pop() {
+                let node = self.tree.get_node(node_index);
+                let key = &node.key;
+
+                // Check if we're past the end bound
+                let past_end = match &self.end_bound {
+                    Bound::Included(end) => key > end,
+                    Bound::Excluded(end) => key >= end,
+                    Bound::Unbounded => false,
+                };
+
+                if past_end {
+                    return None;
+                }
+
+                // Check if we're at or past the start bound
+                let at_start = match &self.start_bound {
+                    Bound::Included(start) => key >= start,
+                    Bound::Excluded(start) => key > start,
+                    Bound::Unbounded => true,
+                };
+
+                // Move to right child for next iteration
+                self.current = self.tree.get_right(node_index);
+
+                if at_start {
+                    return Some((key, &node.value));
+                }
+                // If not at start yet, continue to next node
+            } else {
+                return None;
+            }
+        }
     }
 }
 
@@ -1382,4 +1540,162 @@ fn remove_root() {
     let root = tree.remove_root().unwrap();
     assert_eq!(root.key, 1);
     assert_eq!(root.value, 5);
+}
+
+#[test]
+fn test_range_iterator() {
+    type Rbt = RedBlackTree<u64, u64, 1024>;
+    let mut buf = vec![0u8; size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
+
+    // Insert values 0-9
+    for i in 0..10 {
+        tree.insert(i, i * 10).unwrap();
+    }
+
+    // Test inclusive range
+    let range_vec: Vec<_> = tree.range(3..7).collect();
+    assert_eq!(range_vec.len(), 4);
+    assert_eq!(range_vec[0], (&3, &30));
+    assert_eq!(range_vec[1], (&4, &40));
+    assert_eq!(range_vec[2], (&5, &50));
+    assert_eq!(range_vec[3], (&6, &60));
+
+    // Test inclusive end range
+    let range_vec: Vec<_> = tree.range(3..=7).collect();
+    assert_eq!(range_vec.len(), 5);
+    assert_eq!(range_vec[4], (&7, &70));
+
+    // Test unbounded start
+    let range_vec: Vec<_> = tree.range(..3).collect();
+    assert_eq!(range_vec.len(), 3);
+    assert_eq!(range_vec[0], (&0, &0));
+    assert_eq!(range_vec[1], (&1, &10));
+    assert_eq!(range_vec[2], (&2, &20));
+
+    // Test unbounded end
+    let range_vec: Vec<_> = tree.range(7..).collect();
+    assert_eq!(range_vec.len(), 3);
+    assert_eq!(range_vec[0], (&7, &70));
+    assert_eq!(range_vec[1], (&8, &80));
+    assert_eq!(range_vec[2], (&9, &90));
+
+    // Test full range
+    let range_vec: Vec<_> = tree.range(..).collect();
+    assert_eq!(range_vec.len(), 10);
+
+    // Test empty range
+    let range_vec: Vec<_> = tree.range(20..30).collect();
+    assert_eq!(range_vec.len(), 0);
+
+    // Test excluded bounds
+    let range_vec: Vec<_> = tree.range((Bound::Excluded(3), Bound::Excluded(6))).collect();
+    assert_eq!(range_vec.len(), 2);
+    assert_eq!(range_vec[0], (&4, &40));
+    assert_eq!(range_vec[1], (&5, &50));
+}
+
+#[test]
+fn test_range_iterator_with_gaps() {
+    type Rbt = RedBlackTree<u64, u64, 1024>;
+    let mut buf = vec![0u8; size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
+
+    // Insert values with gaps
+    for i in [1, 5, 10, 15, 20, 25, 30].iter() {
+        tree.insert(*i, i * 100).unwrap();
+    }
+
+    // Test range that spans gaps
+    let range_vec: Vec<_> = tree.range(7..23).collect();
+    assert_eq!(range_vec.len(), 3);
+    assert_eq!(range_vec[0], (&10, &1000));
+    assert_eq!(range_vec[1], (&15, &1500));
+    assert_eq!(range_vec[2], (&20, &2000));
+
+    // Test range that starts in a gap
+    let range_vec: Vec<_> = tree.range(12..=25).collect();
+    assert_eq!(range_vec.len(), 3);
+    assert_eq!(range_vec[0], (&15, &1500));
+    assert_eq!(range_vec[1], (&20, &2000));
+    assert_eq!(range_vec[2], (&25, &2500));
+}
+
+#[test]
+fn test_range_iterator_basic() {
+    type Rbt = RedBlackTree<u64, u64, 1024>;
+    let mut buf = vec![0u8; size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
+
+    // Test with empty tree
+    let range_vec: Vec<_> = tree.range(0..10).collect();
+    assert_eq!(range_vec.len(), 0);
+
+    // Insert some values
+    for i in 0..20 {
+        tree.insert(i, i * 100).unwrap();
+    }
+
+    // Basic iteration test
+    let mut count = 0;
+    for (k, v) in tree.range(5..15) {
+        assert!(*k >= 5 && *k < 15);
+        assert_eq!(*v, k * 100);
+        count += 1;
+    }
+    assert_eq!(count, 10);
+}
+
+#[test]
+fn test_range_iterator_bounds_edge_cases() {
+    type Rbt = RedBlackTree<u64, u64, 1024>;
+    let mut buf = vec![0u8; size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
+
+    for i in 0..10 {
+        tree.insert(i * 2, i * 200).unwrap();  // 0, 2, 4, 6, 8, 10, 12, 14, 16, 18
+    }
+
+    // Test bounds that fall between keys
+    let range_vec: Vec<_> = tree.range(3..7).map(|(k, _)| *k).collect();
+    assert_eq!(range_vec, vec![4, 6]);
+
+    // Test exact key boundaries
+    let range_vec: Vec<_> = tree.range(4..8).map(|(k, _)| *k).collect();
+    assert_eq!(range_vec, vec![4, 6]);
+
+    // Test inclusive vs exclusive
+    let range_vec: Vec<_> = tree.range(4..=8).map(|(k, _)| *k).collect();
+    assert_eq!(range_vec, vec![4, 6, 8]);
+}
+
+#[test]
+fn test_range_iterator_custom_bounds() {
+    use std::ops::Bound;
+
+    type Rbt = RedBlackTree<u64, u64, 1024>;
+    let mut buf = vec![0u8; size_of::<Rbt>()];
+    let tree = Rbt::new_from_slice(buf.as_mut_slice());
+
+    for i in 0..10 {
+        tree.insert(i, i * 10).unwrap();
+    }
+
+    // Test custom bounds with Excluded start and Included end
+    let range_vec: Vec<_> = tree.range((Bound::Excluded(3), Bound::Included(7)))
+        .map(|(k, _)| *k)
+        .collect();
+    assert_eq!(range_vec, vec![4, 5, 6, 7]);
+
+    // Test custom bounds with Included start and Excluded end
+    let range_vec: Vec<_> = tree.range((Bound::Included(3), Bound::Excluded(7)))
+        .map(|(k, _)| *k)
+        .collect();
+    assert_eq!(range_vec, vec![3, 4, 5, 6]);
+
+    // Test both Excluded
+    let range_vec: Vec<_> = tree.range((Bound::Excluded(3), Bound::Excluded(7)))
+        .map(|(k, _)| *k)
+        .collect();
+    assert_eq!(range_vec, vec![4, 5, 6]);
 }
