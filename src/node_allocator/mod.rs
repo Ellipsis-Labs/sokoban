@@ -1,11 +1,15 @@
 mod helper;
-mod multi;
+mod multi_arena;
+mod resizable_multi_arena;
 mod simple;
 
 use bytemuck::{Pod, Zeroable};
 
 pub use helper::*;
-pub use multi::{block_size_of, Arena, MultiArenaNodeAllocator, Superblock};
+pub use multi_arena::{block_size_of, Arena, MultiArenaNodeAllocator, Superblock};
+pub use resizable_multi_arena::{
+    MultiArenaNodeAllocator as ResizableMultiArenaNodeAllocator, Superblock as ResizableSuperblock,
+};
 pub use simple::SimpleNodeAllocator;
 
 /// This is a convenience trait that exposes an interface to read a struct from an arbitrary byte array
@@ -73,6 +77,20 @@ impl<T: Copy + Clone + Pod + Zeroable + Default, const NUM_REGISTERS: usize> Def
             value: T::default(),
         }
     }
+}
+
+unsafe impl<T: Copy + Clone + Pod + Zeroable + Default, const NUM_REGISTERS: usize> Zeroable
+    for Node<T, NUM_REGISTERS>
+{
+}
+unsafe impl<T: Copy + Clone + Pod + Zeroable + Default, const NUM_REGISTERS: usize> Pod
+    for Node<T, NUM_REGISTERS>
+{
+}
+
+impl<T: Copy + Clone + Pod + Zeroable + Default, const NUM_REGISTERS: usize> ZeroCopy
+    for Node<T, NUM_REGISTERS>
+{
 }
 
 impl<T: Copy + Clone + Pod + Zeroable + Default, const NUM_REGISTERS: usize>
