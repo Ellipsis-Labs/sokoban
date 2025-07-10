@@ -8,6 +8,8 @@ mod bench_tests {
     use rand::{self, Rng};
     use sokoban::node_allocator::FromSlice;
     use sokoban::node_allocator::NodeAllocatorMap;
+    use sokoban::node_allocator::SimpleNodeAllocator;
+    use sokoban::red_black_tree::RBNode;
     use sokoban::*;
     use std::collections::BTreeMap;
     use std::collections::HashMap;
@@ -17,7 +19,8 @@ mod bench_tests {
     const NUM_BUCKETS: usize = MAX_SIZE >> 2;
     const NUM_NODES: usize = (MAX_SIZE << 1) + 1;
 
-    type RBTree = RedBlackTree<u128, u128, MAX_SIZE>;
+    type RBTree =
+        RedBlackTree<u128, u128, SimpleNodeAllocator<RBNode<u128, u128>, MAX_SIZE, 4>, MAX_SIZE>;
     type SHashMap = HashTable<u128, u128, NUM_BUCKETS, MAX_SIZE>;
     type AVLTreeMap = AVLTree<u128, u128, MAX_SIZE>;
     type CritbitTree = Critbit<u128, NUM_NODES, MAX_SIZE>;
@@ -25,7 +28,8 @@ mod bench_tests {
     const NUM_BUCKETS_1K: usize = 1000;
     const NUM_NODES_1K: usize = (1001 << 1) + 1;
 
-    type RBTree1K = RedBlackTree<u128, u128, 1001>;
+    type RBTree1K =
+        RedBlackTree<u128, u128, SimpleNodeAllocator<RBNode<u128, u128>, 1001, 4>, 1001>;
     type SHashMap1K = HashTable<u128, u128, NUM_BUCKETS_1K, 2001>;
     type AVLTreeMap1K = AVLTree<u128, u128, 1001>;
     type CritbitTree1K = Critbit<u128, NUM_NODES_1K, 1001>;
@@ -313,7 +317,6 @@ mod bench_tests {
             }
         })
     }
-
 
     #[bench]
     fn bench_std_btree_map_lookup_20000_u128(b: &mut Bencher) {

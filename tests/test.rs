@@ -9,6 +9,8 @@ use rand::thread_rng;
 use rand::{self, Rng};
 use sokoban::node_allocator::FromSlice;
 use sokoban::node_allocator::NodeAllocatorMap;
+use sokoban::node_allocator::SimpleNodeAllocator;
+use sokoban::red_black_tree::RBNode;
 use sokoban::*;
 use std::collections::BTreeMap;
 
@@ -283,7 +285,8 @@ where
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_simulate_red_black_tree() {
-    type RBTree = RedBlackTree<u64, Widget, MAX_SIZE>;
+    type RBTree =
+        RedBlackTree<u64, Widget, SimpleNodeAllocator<RBNode<u64, Widget>, MAX_SIZE, 4>, MAX_SIZE>;
     simulate::<u64, RBTree>(true);
 }
 

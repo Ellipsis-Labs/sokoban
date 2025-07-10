@@ -4,13 +4,14 @@ use num_traits::FromPrimitive;
 use std::{
     cmp::Ordering,
     fmt::Debug,
+    marker::PhantomData,
     ops::{Index, IndexMut},
     vec,
 };
 
 use crate::node_allocator::{
-    FromSlice, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap, TreeField as Field,
-    ZeroCopy, SENTINEL,
+    FromSlice, MultiArenaNodeAllocator, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap,
+    SimpleNodeAllocator, TreeField as Field, ZeroCopy, SENTINEL,
 };
 
 pub const ALIGNMENT: u32 = 8;
@@ -68,25 +69,28 @@ impl<
 pub struct RedBlackTree<
     K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
+    Allocator: NodeAllocator<RBNode<K, V>, 4>,
     const MAX_SIZE: usize,
 > {
     pub root: u32,
     _padding: [u32; 3],
-    allocator: NodeAllocator<RBNode<K, V>, MAX_SIZE, 4>,
+    allocator: Allocator,
+    _phantom: PhantomData<(K, V)>,
 }
 
+// Zeroable, Pod, ZeroCopy and FromSlice can only be implemented for SimpleNodeAllocator
 unsafe impl<
         K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
-    > Zeroable for RedBlackTree<K, V, MAX_SIZE>
+    > Zeroable for RedBlackTree<K, V, SimpleNodeAllocator<RBNode<K, V>, MAX_SIZE, 4>, MAX_SIZE>
 {
 }
 unsafe impl<
         K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
-    > Pod for RedBlackTree<K, V, MAX_SIZE>
+    > Pod for RedBlackTree<K, V, SimpleNodeAllocator<RBNode<K, V>, MAX_SIZE, 4>, MAX_SIZE>
 {
 }
 
@@ -94,7 +98,7 @@ impl<
         K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
-    > ZeroCopy for RedBlackTree<K, V, MAX_SIZE>
+    > ZeroCopy for RedBlackTree<K, V, SimpleNodeAllocator<RBNode<K, V>, MAX_SIZE, 4>, MAX_SIZE>
 {
 }
 
@@ -102,23 +106,7 @@ impl<
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
-    > Default for RedBlackTree<K, V, MAX_SIZE>
-{
-    fn default() -> Self {
-        Self::assert_proper_alignment();
-        RedBlackTree {
-            root: SENTINEL,
-            _padding: [0; 3],
-            allocator: NodeAllocator::<RBNode<K, V>, MAX_SIZE, 4>::default(),
-        }
-    }
-}
-
-impl<
-        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > FromSlice for RedBlackTree<K, V, MAX_SIZE>
+    > FromSlice for RedBlackTree<K, V, SimpleNodeAllocator<RBNode<K, V>, MAX_SIZE, 4>, MAX_SIZE>
 {
     fn new_from_slice(slice: &mut [u8]) -> &mut Self {
         Self::assert_proper_alignment();
@@ -128,11 +116,52 @@ impl<
     }
 }
 
+// MultiArena one doesn't have a default constructor, it should be explicitly build
 impl<
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
-    > NodeAllocatorMap<K, V> for RedBlackTree<K, V, MAX_SIZE>
+    > Default for RedBlackTree<K, V, SimpleNodeAllocator<RBNode<K, V>, MAX_SIZE, 4>, MAX_SIZE>
+{
+    fn default() -> Self {
+        Self::assert_proper_alignment();
+        RedBlackTree {
+            root: SENTINEL,
+            _padding: [0; 3],
+            allocator: SimpleNodeAllocator::default(),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<
+        'a,
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const MAX_SIZE: usize,
+    > RedBlackTree<K, V, MultiArenaNodeAllocator<'a, RBNode<K, V>, MAX_SIZE, 4>, MAX_SIZE>
+{
+    pub fn from_buffers(
+        superblock_buffer: &'a mut [u8],
+        arena_buffers: &'a mut [&'a mut [u8]],
+    ) -> Self {
+        Self::assert_proper_alignment();
+        let allocator = MultiArenaNodeAllocator::from_buffers(superblock_buffer, arena_buffers);
+        Self {
+            root: SENTINEL,
+            _padding: [0; 3],
+            allocator,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<RBNode<K, V>, 4>,
+        const MAX_SIZE: usize,
+    > NodeAllocatorMap<K, V> for RedBlackTree<K, V, Allocator, MAX_SIZE>
 {
     fn insert(&mut self, key: K, value: V) -> Option<u32> {
         self._insert(key, value)
@@ -165,11 +194,11 @@ impl<
     }
 
     fn size(&self) -> usize {
-        self.allocator.size as usize
+        self.allocator.size()
     }
 
     fn len(&self) -> usize {
-        self.allocator.size as usize
+        self.allocator.size()
     }
 
     fn capacity(&self) -> usize {
@@ -188,8 +217,9 @@ impl<
 impl<
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<RBNode<K, V>, 4>,
         const MAX_SIZE: usize,
-    > OrderedNodeAllocatorMap<K, V> for RedBlackTree<K, V, MAX_SIZE>
+    > OrderedNodeAllocatorMap<K, V> for RedBlackTree<K, V, Allocator, MAX_SIZE>
 {
     fn get_min_index(&mut self) -> u32 {
         self._find_min(self.root)
@@ -224,7 +254,19 @@ impl<
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
-    > RedBlackTree<K, V, MAX_SIZE>
+    > RedBlackTree<K, V, SimpleNodeAllocator<RBNode<K, V>, MAX_SIZE, 4>, MAX_SIZE>
+{
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl<
+        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<RBNode<K, V>, 4>,
+        const MAX_SIZE: usize,
+    > RedBlackTree<K, V, Allocator, MAX_SIZE>
 {
     pub fn pretty_print(&self) {
         if self.len() == 0 {
@@ -311,10 +353,6 @@ impl<
             println!("Invalid Red-Black Tree: All paths must have the same number of black nodes",);
         }
         balanced
-    }
-
-    pub fn new() -> Self {
-        Self::default()
     }
 
     #[inline(always)]
@@ -721,8 +759,8 @@ impl<
         node
     }
 
-    fn _iter(&self) -> RedBlackTreeIterator<'_, K, V, MAX_SIZE> {
-        RedBlackTreeIterator::<K, V, MAX_SIZE> {
+    fn _iter(&self) -> RedBlackTreeIterator<'_, K, V, Allocator, MAX_SIZE> {
+        RedBlackTreeIterator::<K, V, Allocator, MAX_SIZE> {
             tree: self,
             fwd_stack: vec![],
             fwd_ptr: self.root,
@@ -734,9 +772,9 @@ impl<
         }
     }
 
-    fn _iter_mut(&mut self) -> RedBlackTreeIteratorMut<'_, K, V, MAX_SIZE> {
+    fn _iter_mut(&mut self) -> RedBlackTreeIteratorMut<'_, K, V, Allocator, MAX_SIZE> {
         let node = self.root;
-        RedBlackTreeIteratorMut::<K, V, MAX_SIZE> {
+        RedBlackTreeIteratorMut::<K, V, Allocator, MAX_SIZE> {
             tree: self,
             fwd_stack: vec![],
             fwd_ptr: node,
@@ -753,11 +791,12 @@ impl<
         'a,
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<RBNode<K, V>, 4>,
         const MAX_SIZE: usize,
-    > IntoIterator for &'a RedBlackTree<K, V, MAX_SIZE>
+    > IntoIterator for &'a RedBlackTree<K, V, Allocator, MAX_SIZE>
 {
     type Item = (&'a K, &'a V);
-    type IntoIter = RedBlackTreeIterator<'a, K, V, MAX_SIZE>;
+    type IntoIter = RedBlackTreeIterator<'a, K, V, Allocator, MAX_SIZE>;
     fn into_iter(self) -> Self::IntoIter {
         self._iter()
     }
@@ -767,11 +806,12 @@ impl<
         'a,
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<RBNode<K, V>, 4>,
         const MAX_SIZE: usize,
-    > IntoIterator for &'a mut RedBlackTree<K, V, MAX_SIZE>
+    > IntoIterator for &'a mut RedBlackTree<K, V, Allocator, MAX_SIZE>
 {
     type Item = (&'a K, &'a mut V);
-    type IntoIter = RedBlackTreeIteratorMut<'a, K, V, MAX_SIZE>;
+    type IntoIter = RedBlackTreeIteratorMut<'a, K, V, Allocator, MAX_SIZE>;
     fn into_iter(self) -> Self::IntoIter {
         self._iter_mut()
     }
@@ -781,9 +821,10 @@ pub struct RedBlackTreeIterator<
     'a,
     K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
+    Allocator: NodeAllocator<RBNode<K, V>, 4>,
     const MAX_SIZE: usize,
 > {
-    tree: &'a RedBlackTree<K, V, MAX_SIZE>,
+    tree: &'a RedBlackTree<K, V, Allocator, MAX_SIZE>,
     fwd_stack: Vec<u32>,
     fwd_ptr: u32,
     fwd_node: Option<u32>,
@@ -797,8 +838,9 @@ impl<
         'a,
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<RBNode<K, V>, 4>,
         const MAX_SIZE: usize,
-    > Iterator for RedBlackTreeIterator<'a, K, V, MAX_SIZE>
+    > Iterator for RedBlackTreeIterator<'a, K, V, Allocator, MAX_SIZE>
 {
     type Item = (&'a K, &'a V);
 
@@ -827,8 +869,9 @@ impl<
         'a,
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<RBNode<K, V>, 4>,
         const MAX_SIZE: usize,
-    > DoubleEndedIterator for RedBlackTreeIterator<'a, K, V, MAX_SIZE>
+    > DoubleEndedIterator for RedBlackTreeIterator<'a, K, V, Allocator, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         while !self.terminated && (!self.rev_stack.is_empty() || self.rev_ptr != SENTINEL) {
@@ -855,9 +898,10 @@ pub struct RedBlackTreeIteratorMut<
     'a,
     K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
+    Allocator: NodeAllocator<RBNode<K, V>, 4>,
     const MAX_SIZE: usize,
 > {
-    tree: &'a mut RedBlackTree<K, V, MAX_SIZE>,
+    tree: &'a mut RedBlackTree<K, V, Allocator, MAX_SIZE>,
     fwd_stack: Vec<u32>,
     fwd_ptr: u32,
     fwd_node: Option<u32>,
@@ -871,8 +915,9 @@ impl<
         'a,
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<RBNode<K, V>, 4>,
         const MAX_SIZE: usize,
-    > Iterator for RedBlackTreeIteratorMut<'a, K, V, MAX_SIZE>
+    > Iterator for RedBlackTreeIteratorMut<'a, K, V, Allocator, MAX_SIZE>
 {
     type Item = (&'a K, &'a mut V);
 
@@ -890,15 +935,14 @@ impl<
                 self.fwd_node = current_node;
                 let ptr = self.fwd_node.unwrap();
                 self.fwd_ptr = self.tree.get_right(ptr);
-                // TODO: How does one remove this unsafe?
+                // SAFETY: This is required to extend the lifetime of the mutable reference
+                // to 'a, but Rust's borrow checker cannot prove this is safe. The iterator
+                // guarantees only one mutable reference to each node at a time, and the
+                // iterator itself is unique, so this is sound as long as the iterator is
+                // not misused (e.g., aliased or cloned).
                 unsafe {
-                    let node = (*self
-                        .tree
-                        .allocator
-                        .nodes
-                        .as_mut_ptr()
-                        .add((ptr - 1) as usize))
-                    .get_value_mut();
+                    let node: &mut RBNode<_, _> =
+                        &mut *(&mut *self.tree.allocator.get_mut(ptr).get_value_mut() as *mut _);
                     return Some((&node.key, &mut node.value));
                 }
             }
@@ -911,8 +955,9 @@ impl<
         'a,
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<RBNode<K, V>, 4>,
         const MAX_SIZE: usize,
-    > DoubleEndedIterator for RedBlackTreeIteratorMut<'a, K, V, MAX_SIZE>
+    > DoubleEndedIterator for RedBlackTreeIteratorMut<'a, K, V, Allocator, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         while !self.terminated && (!self.rev_stack.is_empty() || self.rev_ptr != SENTINEL) {
@@ -928,15 +973,14 @@ impl<
                 self.rev_node = current_node;
                 let ptr = self.rev_node.unwrap();
                 self.rev_ptr = self.tree.get_left(ptr);
-                // TODO: How does one remove this unsafe?
+                // SAFETY: This is required to extend the lifetime of the mutable reference
+                // to 'a, but Rust's borrow checker cannot prove this is safe. The iterator
+                // guarantees only one mutable reference to each node at a time, and the
+                // iterator itself is unique, so this is sound as long as the iterator is
+                // not misused (e.g., aliased or cloned).
                 unsafe {
-                    let node = (*self
-                        .tree
-                        .allocator
-                        .nodes
-                        .as_mut_ptr()
-                        .add((ptr - 1) as usize))
-                    .get_value_mut();
+                    let node: &mut RBNode<_, _> =
+                        &mut *(&mut *self.tree.allocator.get_mut(ptr).get_value_mut() as *mut _);
                     return Some((&node.key, &mut node.value));
                 }
             }
@@ -948,8 +992,9 @@ impl<
 impl<
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<RBNode<K, V>, 4>,
         const MAX_SIZE: usize,
-    > Index<&K> for RedBlackTree<K, V, MAX_SIZE>
+    > Index<&K> for RedBlackTree<K, V, Allocator, MAX_SIZE>
 {
     type Output = V;
 
@@ -961,425 +1006,440 @@ impl<
 impl<
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<RBNode<K, V>, 4>,
         const MAX_SIZE: usize,
-    > IndexMut<&K> for RedBlackTree<K, V, MAX_SIZE>
+    > IndexMut<&K> for RedBlackTree<K, V, Allocator, MAX_SIZE>
 {
     fn index_mut(&mut self, index: &K) -> &mut Self::Output {
         self.get_mut(index).unwrap()
     }
 }
 
-#[test]
-/// This test addresses the case where a node's parent and uncle are both red.
-/// This is resolved by coloring the parent and uncle black and the grandparent red.
-fn test_insert_with_red_parent_and_uncle() {
-    type Rbt = RedBlackTree<u64, u64, 1024>;
-    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-    let tree = Rbt::new_from_slice(buf.as_mut_slice());
-    let addrs = vec![
-        tree.insert(61, 0).unwrap(),
-        tree.insert(52, 0).unwrap(),
-        tree.insert(85, 0).unwrap(),
-        tree.insert(76, 0).unwrap(),
-        tree.insert(93, 0).unwrap(),
-    ];
+#[cfg(test)]
+mod test {
 
-    let parent = addrs[4];
-    let uncle = addrs[3];
-    let grandparent = addrs[2];
+    use super::*;
 
-    assert_eq!(tree.get_left(addrs[0]), addrs[1]);
-    assert_eq!(tree.get_right(addrs[0]), grandparent);
-    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
-    assert_eq!(tree.get_parent(grandparent), addrs[0]);
+    use crate::node_allocator::{MultiArenaNodeAllocator, SimpleNodeAllocator};
 
-    assert_eq!(tree.get_left(grandparent), uncle);
-    assert_eq!(tree.get_right(grandparent), parent);
-    assert_eq!(tree.get_parent(uncle), grandparent);
-    assert_eq!(tree.get_parent(parent), grandparent);
+    type SimpleRedBlackTree<const SIZE: usize> =
+        RedBlackTree<u64, u64, SimpleNodeAllocator<RBNode<u64, u64>, SIZE, 4>, SIZE>;
 
-    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(grandparent));
-    assert!(tree.is_red(uncle) && tree.is_red(parent));
+    type MultiArenaRedBlackTree<'a, const SIZE: usize> =
+        RedBlackTree<u64, u64, MultiArenaNodeAllocator<'a, RBNode<u64, u64>, SIZE, 4>, SIZE>;
 
-    let leaf = tree.insert(100, 0).unwrap();
+    #[test]
+    /// This test addresses the case where a node's parent and uncle are both red.
+    /// This is resolved by coloring the parent and uncle black and the grandparent red.
+    fn test_insert_with_red_parent_and_uncle() {
+        type Rbt = SimpleRedBlackTree<1024>;
+        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        let addrs = vec![
+            tree.insert(61, 0).unwrap(),
+            tree.insert(52, 0).unwrap(),
+            tree.insert(85, 0).unwrap(),
+            tree.insert(76, 0).unwrap(),
+            tree.insert(93, 0).unwrap(),
+        ];
 
-    assert!(
-        tree.is_black(addrs[0])
-            && tree.is_black(addrs[1])
-            && tree.is_black(uncle)
-            && tree.is_black(parent)
-    );
-    assert!(tree.is_red(grandparent) && tree.is_red(leaf));
-}
+        let parent = addrs[4];
+        let uncle = addrs[3];
+        let grandparent = addrs[2];
 
-#[test]
-/// This test addresses the case where a node's parent (P) is red and uncle is black.
-/// The new leaf (L) is the right child of the parent and the parent is the right
-/// child of the grandparent (G).
-///
-/// "P is right child of G and L is right child of P."
-///
-/// We resolve this by rotating the grandparent left and then
-/// fixing the colors.
-fn test_right_insert_with_red_right_child_parent_and_black_uncle() {
-    type Rbt = RedBlackTree<u64, u64, 1024>;
-    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-    let tree = Rbt::new_from_slice(buf.as_mut_slice());
-    let addrs = vec![
-        tree.insert(61, 0).unwrap(),
-        tree.insert(52, 0).unwrap(),
-        tree.insert(85, 0).unwrap(),
-        tree.insert(93, 0).unwrap(),
-    ];
+        assert_eq!(tree.get_left(addrs[0]), addrs[1]);
+        assert_eq!(tree.get_right(addrs[0]), grandparent);
+        assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+        assert_eq!(tree.get_parent(grandparent), addrs[0]);
 
-    let parent = addrs[3];
-    // Uncle is black as it is null
-    let grandparent = addrs[2];
+        assert_eq!(tree.get_left(grandparent), uncle);
+        assert_eq!(tree.get_right(grandparent), parent);
+        assert_eq!(tree.get_parent(uncle), grandparent);
+        assert_eq!(tree.get_parent(parent), grandparent);
 
-    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(grandparent));
-    assert!(tree.is_red(parent));
+        assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(grandparent));
+        assert!(tree.is_red(uncle) && tree.is_red(parent));
 
-    assert_eq!(tree.get_left(addrs[0]), addrs[1]);
-    assert_eq!(tree.get_right(addrs[0]), grandparent);
-    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
-    assert_eq!(tree.get_parent(grandparent), addrs[0]);
+        let leaf = tree.insert(100, 0).unwrap();
 
-    assert_eq!(tree.get_left(grandparent), SENTINEL);
-    assert_eq!(tree.get_right(grandparent), parent);
-    assert_eq!(tree.get_parent(parent), grandparent);
-
-    let leaf = tree.insert(100, 0).unwrap();
-
-    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(parent));
-    assert!(tree.is_red(grandparent) && tree.is_red(leaf));
-
-    assert_eq!(tree.get_left(addrs[0]), addrs[1]);
-    assert_eq!(tree.get_right(addrs[0]), parent);
-    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
-    assert_eq!(tree.get_parent(parent), addrs[0]);
-
-    assert_eq!(tree.get_left(parent), grandparent);
-    assert_eq!(tree.get_right(parent), leaf);
-    assert_eq!(tree.get_parent(grandparent), parent);
-    assert_eq!(tree.get_parent(leaf), parent);
-    assert!(tree.is_leaf(leaf) && tree.is_leaf(grandparent));
-}
-
-#[test]
-/// This test addresses the case where a node's parent is red and uncle is black.
-/// The new leaf is the left child of the parent and the parent is the right
-/// child of the grandparent.
-///
-/// "P is right child of G and L is left child of P."
-///
-/// We resolve this by rotating the parent right then applying the same
-/// algorithm as the previous test.
-fn test_left_insert_with_red_right_child_parent_and_black_uncle() {
-    type Rbt = RedBlackTree<u64, u64, 1024>;
-    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-    let tree = Rbt::new_from_slice(buf.as_mut_slice());
-    let addrs = vec![
-        tree.insert(61, 0).unwrap(),
-        tree.insert(52, 0).unwrap(),
-        tree.insert(85, 0).unwrap(),
-        tree.insert(93, 0).unwrap(),
-    ];
-
-    let parent = addrs[3];
-    // Uncle is black as it is null
-    let grandparent = addrs[2];
-
-    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(grandparent));
-    assert!(tree.is_red(parent));
-
-    assert_eq!(tree.get_left(addrs[0]), addrs[1]);
-    assert_eq!(tree.get_right(addrs[0]), grandparent);
-    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
-    assert_eq!(tree.get_parent(grandparent), addrs[0]);
-
-    assert_eq!(tree.get_left(grandparent), SENTINEL);
-    assert_eq!(tree.get_right(grandparent), parent);
-    assert_eq!(tree.get_parent(parent), grandparent);
-
-    let leaf = tree.insert(87, 0).unwrap();
-
-    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(leaf));
-    assert!(tree.is_red(grandparent) && tree.is_red(parent));
-
-    assert_eq!(tree.get_left(addrs[0]), addrs[1]);
-    assert_eq!(tree.get_right(addrs[0]), leaf);
-    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
-    assert_eq!(tree.get_parent(leaf), addrs[0]);
-
-    assert_eq!(tree.get_left(leaf), grandparent);
-    assert_eq!(tree.get_right(leaf), parent);
-    assert_eq!(tree.get_parent(grandparent), leaf);
-    assert_eq!(tree.get_parent(parent), leaf);
-    assert!(tree.is_leaf(parent) && tree.is_leaf(grandparent));
-}
-
-#[test]
-/// This test addresses the case where a node's parent is red and uncle is black.
-/// The new leaf is the left child of the parent and the parent is the left
-/// child of the grandparent.
-///
-/// "P is left child of G and L is left child of P."
-///
-/// We resolve this by rotating the grandparent right and then
-/// fixing the colors.
-fn test_left_insert_with_red_left_child_parent_and_black_uncle() {
-    type Rbt = RedBlackTree<u64, u64, 1024>;
-    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-    let tree = Rbt::new_from_slice(buf.as_mut_slice());
-    let addrs = vec![
-        tree.insert(61, 0).unwrap(),
-        tree.insert(85, 0).unwrap(),
-        tree.insert(52, 0).unwrap(),
-        tree.insert(41, 0).unwrap(),
-    ];
-
-    let parent = addrs[3];
-    // Uncle is black as it is null
-    let grandparent = addrs[2];
-
-    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(grandparent));
-    assert!(tree.is_red(parent));
-
-    assert_eq!(tree.get_right(addrs[0]), addrs[1]);
-    assert_eq!(tree.get_left(addrs[0]), grandparent);
-    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
-    assert_eq!(tree.get_parent(grandparent), addrs[0]);
-
-    assert_eq!(tree.get_right(grandparent), SENTINEL);
-    assert_eq!(tree.get_left(grandparent), parent);
-    assert_eq!(tree.get_parent(parent), grandparent);
-
-    let leaf = tree.insert(25, 0).unwrap();
-
-    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(parent));
-    assert!(tree.is_red(grandparent) && tree.is_red(leaf));
-
-    assert_eq!(tree.get_right(addrs[0]), addrs[1]);
-    assert_eq!(tree.get_left(addrs[0]), parent);
-    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
-    assert_eq!(tree.get_parent(parent), addrs[0]);
-
-    assert_eq!(tree.get_right(parent), grandparent);
-    assert_eq!(tree.get_left(parent), leaf);
-    assert_eq!(tree.get_parent(grandparent), parent);
-    assert_eq!(tree.get_parent(leaf), parent);
-    assert!(tree.is_leaf(leaf) && tree.is_leaf(grandparent));
-}
-
-#[test]
-/// This test addresses the case where a node's parent is red and uncle is black.
-/// The new leaf is the right child of the parent and the parent is the left
-/// child of the grandparent.
-///
-/// "P is left child of G and L is right child of P."
-///
-/// We resolve this by rotating the parent left then applying the same
-/// algorithm as the previous test.
-fn test_right_insert_with_red_left_child_parent_and_black_uncle() {
-    type Rbt = RedBlackTree<u64, u64, 1024>;
-    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-    let tree = Rbt::new_from_slice(buf.as_mut_slice());
-    let addrs = vec![
-        tree.insert(61, 0).unwrap(),
-        tree.insert(85, 0).unwrap(),
-        tree.insert(52, 0).unwrap(),
-        tree.insert(41, 0).unwrap(),
-    ];
-
-    let parent = addrs[3];
-    // Uncle is black as it is null
-    let grandparent = addrs[2];
-
-    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(grandparent));
-    assert!(tree.is_red(parent));
-
-    assert_eq!(tree.get_right(addrs[0]), addrs[1]);
-    assert_eq!(tree.get_left(addrs[0]), grandparent);
-    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
-    assert_eq!(tree.get_parent(grandparent), addrs[0]);
-
-    assert_eq!(tree.get_right(grandparent), SENTINEL);
-    assert_eq!(tree.get_left(grandparent), parent);
-    assert_eq!(tree.get_parent(parent), grandparent);
-
-    let leaf = tree.insert(47, 0).unwrap();
-
-    assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(leaf));
-    assert!(tree.is_red(grandparent) && tree.is_red(parent));
-
-    assert_eq!(tree.get_right(addrs[0]), addrs[1]);
-    assert_eq!(tree.get_left(addrs[0]), leaf);
-    assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
-    assert_eq!(tree.get_parent(leaf), addrs[0]);
-
-    assert_eq!(tree.get_right(leaf), grandparent);
-    assert_eq!(tree.get_left(leaf), parent);
-    assert_eq!(tree.get_parent(grandparent), leaf);
-    assert_eq!(tree.get_parent(parent), leaf);
-    assert!(tree.is_leaf(parent) && tree.is_leaf(grandparent));
-    tree.pretty_print();
-}
-
-/// Test a power of 2 minus 1
-#[test]
-fn test_delete_multiple_random_1023() {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    type Rbt = RedBlackTree<u64, u64, 1023>;
-    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-    let tree = Rbt::new_from_slice(buf.as_mut_slice());
-    let mut keys = vec![];
-    // Fill up tree
-    for k in 0..1023 {
-        let mut hasher = DefaultHasher::new();
-        (k as u64).hash(&mut hasher);
-        let key = hasher.finish();
-        tree.insert(key, 0).unwrap();
-        keys.push(key);
-        assert!(tree.is_valid_red_black_tree());
+        assert!(
+            tree.is_black(addrs[0])
+                && tree.is_black(addrs[1])
+                && tree.is_black(uncle)
+                && tree.is_black(parent)
+        );
+        assert!(tree.is_red(grandparent) && tree.is_red(leaf));
     }
 
-    for i in keys.iter() {
-        tree.remove(i).unwrap();
-        assert!(tree.is_valid_red_black_tree());
-    }
-}
+    #[test]
+    /// This test addresses the case where a node's parent (P) is red and uncle is black.
+    /// The new leaf (L) is the right child of the parent and the parent is the right
+    /// child of the grandparent (G).
+    ///
+    /// "P is right child of G and L is right child of P."
+    ///
+    /// We resolve this by rotating the grandparent left and then
+    /// fixing the colors.
+    fn test_right_insert_with_red_right_child_parent_and_black_uncle() {
+        type Rbt = SimpleRedBlackTree<1024>;
+        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        let addrs = vec![
+            tree.insert(61, 0).unwrap(),
+            tree.insert(52, 0).unwrap(),
+            tree.insert(85, 0).unwrap(),
+            tree.insert(93, 0).unwrap(),
+        ];
 
-#[test]
-fn test_delete_multiple_random_1024() {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    type Rbt = RedBlackTree<u64, u64, 1024>;
-    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-    let tree = Rbt::new_from_slice(buf.as_mut_slice());
-    let mut keys = vec![];
-    let mut addrs = vec![];
-    // Fill up tree
-    for k in 0..1024 {
-        let mut hasher = DefaultHasher::new();
-        (k as u64).hash(&mut hasher);
-        let key = hasher.finish();
-        addrs.push(tree.insert(key, 0).unwrap());
-        keys.push(key);
-        assert!(tree.is_valid_red_black_tree());
-    }
+        let parent = addrs[3];
+        // Uncle is black as it is null
+        let grandparent = addrs[2];
 
-    for (k, a) in keys.iter().zip(addrs) {
-        assert!(tree.get_addr(k) == a);
-    }
+        assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(grandparent));
+        assert!(tree.is_red(parent));
 
-    for i in keys.iter() {
-        tree.remove(i).unwrap();
-        assert!(tree.is_valid_red_black_tree());
-    }
-}
+        assert_eq!(tree.get_left(addrs[0]), addrs[1]);
+        assert_eq!(tree.get_right(addrs[0]), grandparent);
+        assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+        assert_eq!(tree.get_parent(grandparent), addrs[0]);
 
-#[test]
-fn test_delete_multiple_random_2048() {
-    use std::collections::{hash_map::DefaultHasher, BTreeMap};
-    use std::hash::{Hash, Hasher};
-    type Rbt = RedBlackTree<u64, u64, 2048>;
-    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-    let tree = Rbt::new_from_slice(buf.as_mut_slice());
-    let mut keys = vec![];
-    // Fill up tree
-    for k in 0..2048 {
-        let mut hasher = DefaultHasher::new();
-        (k as u64).hash(&mut hasher);
-        let key = hasher.finish();
-        tree.insert(key, 0).unwrap();
-        keys.push(key);
-    }
+        assert_eq!(tree.get_left(grandparent), SENTINEL);
+        assert_eq!(tree.get_right(grandparent), parent);
+        assert_eq!(tree.get_parent(parent), grandparent);
 
-    let key_to_index = keys
-        .iter()
-        .enumerate()
-        .map(|(i, k)| (*k, i as u64))
-        .collect::<BTreeMap<_, _>>();
+        let leaf = tree.insert(100, 0).unwrap();
 
-    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-    let index_tree = Rbt::new_from_slice(buf.as_mut_slice());
-    let mut index_keys = vec![];
+        assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(parent));
+        assert!(tree.is_red(grandparent) && tree.is_red(leaf));
 
-    for k in keys.iter() {
-        let key = key_to_index[k];
-        index_tree.insert(key, 0).unwrap();
-        index_keys.push(key);
+        assert_eq!(tree.get_left(addrs[0]), addrs[1]);
+        assert_eq!(tree.get_right(addrs[0]), parent);
+        assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+        assert_eq!(tree.get_parent(parent), addrs[0]);
+
+        assert_eq!(tree.get_left(parent), grandparent);
+        assert_eq!(tree.get_right(parent), leaf);
+        assert_eq!(tree.get_parent(grandparent), parent);
+        assert_eq!(tree.get_parent(leaf), parent);
+        assert!(tree.is_leaf(leaf) && tree.is_leaf(grandparent));
     }
 
-    assert!(index_tree.is_valid_red_black_tree());
-    for i in index_keys.iter() {
-        index_tree.remove(i).unwrap();
+    #[test]
+    /// This test addresses the case where a node's parent is red and uncle is black.
+    /// The new leaf is the left child of the parent and the parent is the right
+    /// child of the grandparent.
+    ///
+    /// "P is right child of G and L is left child of P."
+    ///
+    /// We resolve this by rotating the parent right then applying the same
+    /// algorithm as the previous test.
+    fn test_left_insert_with_red_right_child_parent_and_black_uncle() {
+        type Rbt = SimpleRedBlackTree<1024>;
+        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        let addrs = vec![
+            tree.insert(61, 0).unwrap(),
+            tree.insert(52, 0).unwrap(),
+            tree.insert(85, 0).unwrap(),
+            tree.insert(93, 0).unwrap(),
+        ];
+
+        let parent = addrs[3];
+        // Uncle is black as it is null
+        let grandparent = addrs[2];
+
+        assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(grandparent));
+        assert!(tree.is_red(parent));
+
+        assert_eq!(tree.get_left(addrs[0]), addrs[1]);
+        assert_eq!(tree.get_right(addrs[0]), grandparent);
+        assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+        assert_eq!(tree.get_parent(grandparent), addrs[0]);
+
+        assert_eq!(tree.get_left(grandparent), SENTINEL);
+        assert_eq!(tree.get_right(grandparent), parent);
+        assert_eq!(tree.get_parent(parent), grandparent);
+
+        let leaf = tree.insert(87, 0).unwrap();
+
+        assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(leaf));
+        assert!(tree.is_red(grandparent) && tree.is_red(parent));
+
+        assert_eq!(tree.get_left(addrs[0]), addrs[1]);
+        assert_eq!(tree.get_right(addrs[0]), leaf);
+        assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+        assert_eq!(tree.get_parent(leaf), addrs[0]);
+
+        assert_eq!(tree.get_left(leaf), grandparent);
+        assert_eq!(tree.get_right(leaf), parent);
+        assert_eq!(tree.get_parent(grandparent), leaf);
+        assert_eq!(tree.get_parent(parent), leaf);
+        assert!(tree.is_leaf(parent) && tree.is_leaf(grandparent));
+    }
+
+    #[test]
+    /// This test addresses the case where a node's parent is red and uncle is black.
+    /// The new leaf is the left child of the parent and the parent is the left
+    /// child of the grandparent.
+    ///
+    /// "P is left child of G and L is left child of P."
+    ///
+    /// We resolve this by rotating the grandparent right and then
+    /// fixing the colors.
+    fn test_left_insert_with_red_left_child_parent_and_black_uncle() {
+        type Rbt = SimpleRedBlackTree<1024>;
+        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        let addrs = vec![
+            tree.insert(61, 0).unwrap(),
+            tree.insert(85, 0).unwrap(),
+            tree.insert(52, 0).unwrap(),
+            tree.insert(41, 0).unwrap(),
+        ];
+
+        let parent = addrs[3];
+        // Uncle is black as it is null
+        let grandparent = addrs[2];
+
+        assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(grandparent));
+        assert!(tree.is_red(parent));
+
+        assert_eq!(tree.get_right(addrs[0]), addrs[1]);
+        assert_eq!(tree.get_left(addrs[0]), grandparent);
+        assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+        assert_eq!(tree.get_parent(grandparent), addrs[0]);
+
+        assert_eq!(tree.get_right(grandparent), SENTINEL);
+        assert_eq!(tree.get_left(grandparent), parent);
+        assert_eq!(tree.get_parent(parent), grandparent);
+
+        let leaf = tree.insert(25, 0).unwrap();
+
+        assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(parent));
+        assert!(tree.is_red(grandparent) && tree.is_red(leaf));
+
+        assert_eq!(tree.get_right(addrs[0]), addrs[1]);
+        assert_eq!(tree.get_left(addrs[0]), parent);
+        assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+        assert_eq!(tree.get_parent(parent), addrs[0]);
+
+        assert_eq!(tree.get_right(parent), grandparent);
+        assert_eq!(tree.get_left(parent), leaf);
+        assert_eq!(tree.get_parent(grandparent), parent);
+        assert_eq!(tree.get_parent(leaf), parent);
+        assert!(tree.is_leaf(leaf) && tree.is_leaf(grandparent));
+    }
+
+    #[test]
+    /// This test addresses the case where a node's parent is red and uncle is black.
+    /// The new leaf is the right child of the parent and the parent is the left
+    /// child of the grandparent.
+    ///
+    /// "P is left child of G and L is right child of P."
+    ///
+    /// We resolve this by rotating the parent left then applying the same
+    /// algorithm as the previous test.
+    fn test_right_insert_with_red_left_child_parent_and_black_uncle() {
+        type Rbt = SimpleRedBlackTree<1024>;
+        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        let addrs = vec![
+            tree.insert(61, 0).unwrap(),
+            tree.insert(85, 0).unwrap(),
+            tree.insert(52, 0).unwrap(),
+            tree.insert(41, 0).unwrap(),
+        ];
+
+        let parent = addrs[3];
+        // Uncle is black as it is null
+        let grandparent = addrs[2];
+
+        assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(grandparent));
+        assert!(tree.is_red(parent));
+
+        assert_eq!(tree.get_right(addrs[0]), addrs[1]);
+        assert_eq!(tree.get_left(addrs[0]), grandparent);
+        assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+        assert_eq!(tree.get_parent(grandparent), addrs[0]);
+
+        assert_eq!(tree.get_right(grandparent), SENTINEL);
+        assert_eq!(tree.get_left(grandparent), parent);
+        assert_eq!(tree.get_parent(parent), grandparent);
+
+        let leaf = tree.insert(47, 0).unwrap();
+
+        assert!(tree.is_black(addrs[0]) && tree.is_black(addrs[1]) && tree.is_black(leaf));
+        assert!(tree.is_red(grandparent) && tree.is_red(parent));
+
+        assert_eq!(tree.get_right(addrs[0]), addrs[1]);
+        assert_eq!(tree.get_left(addrs[0]), leaf);
+        assert_eq!(tree.get_parent(addrs[1]), addrs[0]);
+        assert_eq!(tree.get_parent(leaf), addrs[0]);
+
+        assert_eq!(tree.get_right(leaf), grandparent);
+        assert_eq!(tree.get_left(leaf), parent);
+        assert_eq!(tree.get_parent(grandparent), leaf);
+        assert_eq!(tree.get_parent(parent), leaf);
+        assert!(tree.is_leaf(parent) && tree.is_leaf(grandparent));
+        tree.pretty_print();
+    }
+
+    /// Test a power of 2 minus 1
+    #[test]
+    fn test_delete_multiple_random_1023() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        type Rbt = SimpleRedBlackTree<1023>;
+        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        let mut keys = vec![];
+        // Fill up tree
+        for k in 0..1023 {
+            let mut hasher = DefaultHasher::new();
+            (k as u64).hash(&mut hasher);
+            let key = hasher.finish();
+            tree.insert(key, 0).unwrap();
+            keys.push(key);
+            assert!(tree.is_valid_red_black_tree());
+        }
+
+        for i in keys.iter() {
+            tree.remove(i).unwrap();
+            assert!(tree.is_valid_red_black_tree());
+        }
+    }
+
+    #[test]
+    fn test_delete_multiple_random_1024() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        type Rbt = SimpleRedBlackTree<1024>;
+        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        let mut keys = vec![];
+        let mut addrs = vec![];
+        // Fill up tree
+        for k in 0..1024 {
+            let mut hasher = DefaultHasher::new();
+            (k as u64).hash(&mut hasher);
+            let key = hasher.finish();
+            addrs.push(tree.insert(key, 0).unwrap());
+            keys.push(key);
+            assert!(tree.is_valid_red_black_tree());
+        }
+
+        for (k, a) in keys.iter().zip(addrs) {
+            assert!(tree.get_addr(k) == a);
+        }
+
+        for i in keys.iter() {
+            tree.remove(i).unwrap();
+            assert!(tree.is_valid_red_black_tree());
+        }
+    }
+
+    #[test]
+    fn test_delete_multiple_random_2048() {
+        use std::collections::{hash_map::DefaultHasher, BTreeMap};
+        use std::hash::{Hash, Hasher};
+        type Rbt = SimpleRedBlackTree<2048>;
+        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        let mut keys = vec![];
+        // Fill up tree
+        for k in 0..2048 {
+            let mut hasher = DefaultHasher::new();
+            (k as u64).hash(&mut hasher);
+            let key = hasher.finish();
+            tree.insert(key, 0).unwrap();
+            keys.push(key);
+        }
+
+        let key_to_index = keys
+            .iter()
+            .enumerate()
+            .map(|(i, k)| (*k, i as u64))
+            .collect::<BTreeMap<_, _>>();
+
+        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+        let index_tree = Rbt::new_from_slice(buf.as_mut_slice());
+        let mut index_keys = vec![];
+
+        for k in keys.iter() {
+            let key = key_to_index[k];
+            index_tree.insert(key, 0).unwrap();
+            index_keys.push(key);
+        }
+
         assert!(index_tree.is_valid_red_black_tree());
+        for i in index_keys.iter() {
+            index_tree.remove(i).unwrap();
+            assert!(index_tree.is_valid_red_black_tree());
+        }
     }
-}
 
-#[test]
-fn test_delete_multiple_random_512() {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    type Rbt = RedBlackTree<u64, u64, 512>;
-    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-    let tree = Rbt::new_from_slice(buf.as_mut_slice());
-    let mut keys = vec![];
-    // Fill up tree
-    for k in 0..512 {
-        let mut hasher = DefaultHasher::new();
-        (k as u64).hash(&mut hasher);
-        let key = hasher.finish();
-        tree.insert(key, 0).unwrap();
-        keys.push(key);
-        assert!(tree.is_valid_red_black_tree());
+    #[test]
+    fn test_delete_multiple_random_512() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        type Rbt = SimpleRedBlackTree<512>;
+        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        let mut keys = vec![];
+        // Fill up tree
+        for k in 0..512 {
+            let mut hasher = DefaultHasher::new();
+            (k as u64).hash(&mut hasher);
+            let key = hasher.finish();
+            tree.insert(key, 0).unwrap();
+            keys.push(key);
+            assert!(tree.is_valid_red_black_tree());
+        }
+        for i in keys.iter() {
+            tree.remove(i).unwrap();
+            assert!(tree.is_valid_red_black_tree());
+        }
     }
-    for i in keys.iter() {
-        tree.remove(i).unwrap();
-        assert!(tree.is_valid_red_black_tree());
+
+    #[test]
+    fn test_delete_multiple_random_4098() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        type Rbt = SimpleRedBlackTree<4098>;
+        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        let mut keys = vec![];
+        // Fill up tree
+        for k in 0..4098 {
+            let mut hasher = DefaultHasher::new();
+            (k as u64).hash(&mut hasher);
+            let key = hasher.finish();
+            tree.insert(key, 0).unwrap();
+            keys.push(key);
+            assert!(tree.is_valid_red_black_tree());
+        }
+        for i in keys.iter() {
+            tree.remove(i).unwrap();
+            assert!(tree.is_valid_red_black_tree());
+        }
     }
-}
 
-#[test]
-fn test_delete_multiple_random_4098() {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    type Rbt = RedBlackTree<u64, u64, 4098>;
-    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-    let tree = Rbt::new_from_slice(buf.as_mut_slice());
-    let mut keys = vec![];
-    // Fill up tree
-    for k in 0..4098 {
-        let mut hasher = DefaultHasher::new();
-        (k as u64).hash(&mut hasher);
-        let key = hasher.finish();
-        tree.insert(key, 0).unwrap();
-        keys.push(key);
-        assert!(tree.is_valid_red_black_tree());
+    #[test]
+    fn remove_root() {
+        type Rbt = SimpleRedBlackTree<4098>;
+        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
+        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+
+        // Returns none when empty
+        assert!(tree.remove_root().is_none());
+
+        tree._insert(1, 5);
+        tree._insert(2, 0);
+        tree._insert(0, 4);
+
+        // balanced tree should have 1 as root
+        let root = tree.remove_root().unwrap();
+        assert_eq!(root.key, 1);
+        assert_eq!(root.value, 5);
     }
-    for i in keys.iter() {
-        tree.remove(i).unwrap();
-        assert!(tree.is_valid_red_black_tree());
-    }
-}
-
-#[test]
-fn remove_root() {
-    type Rbt = RedBlackTree<u64, u64, 4098>;
-    let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-    let tree = Rbt::new_from_slice(buf.as_mut_slice());
-
-    // Returns none when empty
-    assert!(tree.remove_root().is_none());
-
-    tree._insert(1, 5);
-    tree._insert(2, 0);
-    tree._insert(0, 4);
-
-    // balanced tree should have 1 as root
-    let root = tree.remove_root().unwrap();
-    assert_eq!(root.key, 1);
-    assert_eq!(root.value, 5);
 }

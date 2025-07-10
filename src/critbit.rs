@@ -2,8 +2,8 @@ use bytemuck::{Pod, Zeroable};
 use std::ops::{Index, IndexMut};
 
 use crate::node_allocator::{
-    FromSlice, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap, TreeField as Field,
-    ZeroCopy, SENTINEL,
+    FromSlice, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap, SimpleNodeAllocator,
+    TreeField as Field, ZeroCopy, SENTINEL,
 };
 
 #[repr(C)]
@@ -39,10 +39,10 @@ pub struct Critbit<
     pub root: u32,
     _padding1: u32,
     /// Allocator corresponding to inner nodes and leaf pointers of the critbit
-    node_allocator: NodeAllocator<CritbitNode, NUM_NODES, 4>,
+    node_allocator: SimpleNodeAllocator<CritbitNode, NUM_NODES, 4>,
     /// Allocator corresponding to the leaves of the critbit. Note that this
     /// requires 4 registers per leaf to support proper alignment (for aarch64)
-    leaves: NodeAllocator<V, MAX_SIZE, 4>,
+    leaves: SimpleNodeAllocator<V, MAX_SIZE, 4>,
 }
 
 unsafe impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
@@ -69,8 +69,8 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
             _padding0: 0,
             root: SENTINEL,
             _padding1: 0,
-            node_allocator: NodeAllocator::<CritbitNode, NUM_NODES, 4>::default(),
-            leaves: NodeAllocator::<V, MAX_SIZE, 4>::default(),
+            node_allocator: SimpleNodeAllocator::<CritbitNode, NUM_NODES, 4>::default(),
+            leaves: SimpleNodeAllocator::<V, MAX_SIZE, 4>::default(),
         }
     }
 }

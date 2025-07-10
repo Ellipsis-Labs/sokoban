@@ -1,5 +1,5 @@
 use crate::node_allocator::{
-    FromSlice, NodeAllocator, NodeAllocatorMap, NodeField, ZeroCopy, SENTINEL,
+    FromSlice, NodeAllocator, NodeAllocatorMap, NodeField, SimpleNodeAllocator, ZeroCopy, SENTINEL,
 };
 use bytemuck::{Pod, Zeroable};
 use std::collections::hash_map::DefaultHasher;
@@ -51,7 +51,7 @@ pub struct HashTable<
     const MAX_SIZE: usize,
 > {
     pub buckets: [u32; NUM_BUCKETS],
-    pub allocator: NodeAllocator<HashNode<K, V>, MAX_SIZE, 4>,
+    pub allocator: SimpleNodeAllocator<HashNode<K, V>, MAX_SIZE, 4>,
 }
 
 unsafe impl<
@@ -91,7 +91,7 @@ impl<
         Self::assert_proper_alignment();
         HashTable {
             buckets: [SENTINEL; NUM_BUCKETS],
-            allocator: NodeAllocator::<HashNode<K, V>, MAX_SIZE, 4>::default(),
+            allocator: SimpleNodeAllocator::<HashNode<K, V>, MAX_SIZE, 4>::default(),
         }
     }
 }

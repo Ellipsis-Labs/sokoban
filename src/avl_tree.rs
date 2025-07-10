@@ -5,7 +5,8 @@ use std::{
 };
 
 use crate::node_allocator::{
-    FromSlice, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap, ZeroCopy, SENTINEL,
+    FromSlice, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap, SimpleNodeAllocator,
+    ZeroCopy, SENTINEL,
 };
 
 // The number of registers (the last register is currently not in use).
@@ -69,7 +70,7 @@ pub struct AVLTree<
     const MAX_SIZE: usize,
 > {
     pub root: u64,
-    allocator: NodeAllocator<AVLNode<K, V>, MAX_SIZE, REGISTERS>,
+    allocator: SimpleNodeAllocator<AVLNode<K, V>, MAX_SIZE, REGISTERS>,
 }
 
 unsafe impl<
@@ -233,7 +234,7 @@ impl<
     fn default() -> Self {
         AVLTree {
             root: SENTINEL as u64,
-            allocator: NodeAllocator::<AVLNode<K, V>, MAX_SIZE, REGISTERS>::default(),
+            allocator: SimpleNodeAllocator::<AVLNode<K, V>, MAX_SIZE, REGISTERS>::default(),
         }
     }
 }

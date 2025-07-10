@@ -1,5 +1,5 @@
 use crate::{
-    node_allocator::{NodeAllocator, ZeroCopy, SENTINEL},
+    node_allocator::{NodeAllocator, SimpleNodeAllocator, ZeroCopy, SENTINEL},
     FromSlice,
 };
 use bytemuck::{Pod, Zeroable};
@@ -14,7 +14,7 @@ pub struct Deque<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usi
     pub sequence_number: u64,
     pub head: u32,
     pub tail: u32,
-    allocator: NodeAllocator<T, MAX_SIZE, 2>,
+    allocator: SimpleNodeAllocator<T, MAX_SIZE, 2>,
 }
 
 unsafe impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Zeroable
@@ -49,7 +49,7 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Default
             sequence_number: 0,
             head: SENTINEL,
             tail: SENTINEL,
-            allocator: NodeAllocator::<T, MAX_SIZE, 2>::default(),
+            allocator: SimpleNodeAllocator::<T, MAX_SIZE, 2>::default(),
         }
     }
 }
