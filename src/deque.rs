@@ -60,7 +60,7 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
     }
 
     pub fn initialize(&mut self) {
-        self.allocator.initialize();
+        self.allocator.initialize(MAX_SIZE);
     }
 
     pub fn front(&self) -> Option<&T> {

@@ -214,8 +214,8 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     }
 
     pub fn initialize(&mut self) {
-        self.node_allocator.initialize();
-        self.leaves.initialize();
+        self.node_allocator.initialize(MAX_SIZE);
+        self.leaves.initialize(MAX_SIZE);
     }
 
     pub fn get_leaf(&self, leaf_index: u32) -> &V {

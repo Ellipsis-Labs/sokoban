@@ -5,7 +5,7 @@ mod simple;
 use bytemuck::{Pod, Zeroable};
 
 pub use helper::*;
-pub use multi::MultiArenaNodeAllocator;
+pub use multi::{block_size_of, Arena, MultiArenaNodeAllocator, Superblock};
 pub use simple::SimpleNodeAllocator;
 
 /// This is a convenience trait that exposes an interface to read a struct from an arbitrary byte array
@@ -117,7 +117,7 @@ impl<T: Copy + Clone + Pod + Zeroable + Default, const NUM_REGISTERS: usize>
 pub trait NodeAllocator<T: Copy + Clone + Pod + Zeroable + Default, const NUM_REGISTERS: usize> {
     fn assert_proper_alignment(&self);
 
-    fn initialize(&mut self);
+    fn initialize(&mut self, max_size: usize);
 
     fn get(&self, i: u32) -> &Node<T, NUM_REGISTERS>;
 

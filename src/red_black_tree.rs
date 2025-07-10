@@ -74,7 +74,7 @@ pub struct RedBlackTree<
 > {
     pub root: u32,
     _padding: [u32; 3],
-    allocator: Allocator,
+    pub allocator: Allocator,
     _phantom: PhantomData<(K, V)>,
 }
 
@@ -138,8 +138,9 @@ impl<
         'a,
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        const BLOCK_SIZE: usize,
         const MAX_SIZE: usize,
-    > RedBlackTree<K, V, MultiArenaNodeAllocator<'a, RBNode<K, V>, MAX_SIZE, 4>, MAX_SIZE>
+    > RedBlackTree<K, V, MultiArenaNodeAllocator<'a, RBNode<K, V>, BLOCK_SIZE, 4>, MAX_SIZE>
 {
     pub fn from_buffers(
         superblock_buffer: &'a mut [u8],
@@ -357,7 +358,7 @@ impl<
 
     #[inline(always)]
     pub fn initialize(&mut self) {
-        self.allocator.initialize();
+        self.allocator.initialize(MAX_SIZE);
     }
 
     pub fn get_node(&self, node: u32) -> &RBNode<K, V> {

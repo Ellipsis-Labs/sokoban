@@ -5,13 +5,26 @@ use crate::ZeroCopy;
 
 use super::{Node, NodeAllocator, SENTINEL};
 
+/// Returns the number of nodes in an arena
+pub const fn block_size_of<
+    T: Default + Copy + Clone + Pod + Zeroable,
+    const NUM_REGISTERS: usize,
+    const MAX_SIZE: usize,
+>() -> usize {
+    MAX_SIZE / std::mem::size_of::<Node<T, NUM_REGISTERS>>()
+}
+/**
+ * Superblock consists of the header and a vector containing the size of each arena
+ * The reader is a proxy type for zero-copy deserialization of the superblock
+ */
+
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy, std::fmt::Debug)]
 pub struct Superblock {
-    /// Size of the allocator. The max value this can take is `MAX_SIZE`
+    /// Size of the allocator. The max value this can take is `max_size`
     pub size: u64,
 
-    /// Max size of the allocator. max_arena_number = max_size / block_size
+    /// The max size of the allocator.
     pub max_size: u64,
 
     /// Number of arenas in the superblock, should matches the number of entries in real allocator
@@ -34,14 +47,20 @@ unsafe impl Zeroable for Superblock {}
 unsafe impl Pod for Superblock {}
 impl ZeroCopy for Superblock {}
 
-impl Default for Superblock {
-    fn default() -> Self {
-        Self {
-            size: 0,
-            max_size: 0,
-            bump_index: 1,
-            free_list_head: 1,
-            num_arenas: 1,
+impl Superblock {
+    fn initialize(&mut self, num_arenas: usize, max_size: usize) {
+        if self.size == 0
+            && self.num_arenas == 0
+            && self.bump_index == 0
+            && self.free_list_head == 0
+            && self.max_size == 0
+        {
+            self.max_size = max_size as u64;
+            self.num_arenas = num_arenas as u32;
+            self.bump_index = 1;
+            self.free_list_head = 1;
+        } else {
+            panic!("Cannot reinitialize NodeAllocator");
         }
     }
 }
@@ -98,11 +117,6 @@ impl<
         const NUM_REGISTERS: usize,
     > Arena<T, BLOCK_SIZE, NUM_REGISTERS>
 {
-    #[inline(always)]
-    fn page_per_arena() -> u32 {
-        BLOCK_SIZE as u32
-    }
-
     fn assert_proper_alignment(&self) {
         let reg_size = size_of::<u32>() * NUM_REGISTERS;
         let self_ptr = std::slice::from_ref(self).as_ptr() as usize;
@@ -129,7 +143,6 @@ impl<
             t_size,
             self_align,
         );
-        assert!(node_ptr == self_ptr + 16, "Nodes are misaligned");
         assert!(t_index % t_align == 0, "First index of T is misaligned");
         assert!(
             (t_index + t_size + reg_size) % t_align == 0,
@@ -165,15 +178,9 @@ impl<
     #[inline(always)]
     fn index_conv(&self, i: u32) -> (usize, usize) {
         let page_no = i - 1;
-        let page_per_block = Arena::<T, BLOCK_SIZE, NUM_REGISTERS>::page_per_arena();
-        (
-            (page_no / page_per_block) as usize,
-            (page_no % page_per_block) as usize,
-        )
-    }
-
-    fn max_size(&self) -> usize {
-        self.superblock.max_size as usize
+        let block_no = page_no / BLOCK_SIZE as u32;
+        let node_no = page_no % BLOCK_SIZE as u32;
+        (block_no as usize, node_no as usize)
     }
 
     pub fn from_buffers(
@@ -211,19 +218,10 @@ impl<
         self.superblock.size as usize
     }
 
-    fn initialize(&mut self) {
+    fn initialize(&mut self, max_size: usize) {
         assert!(NUM_REGISTERS >= 1);
         self.assert_proper_alignment();
-        assert!(self.superblock.num_arenas > 0);
-        if self.superblock.size == 0
-            && self.superblock.bump_index == 0
-            && self.superblock.free_list_head == 0
-        {
-            self.superblock.bump_index = 1;
-            self.superblock.free_list_head = 1;
-        } else {
-            panic!("Cannot reinitialize NodeAllocator");
-        }
+        self.superblock.initialize(self.arenas.len(), max_size);
     }
 
     #[inline(always)]
@@ -243,8 +241,13 @@ impl<
     fn add_node(&mut self, node: T) -> u32 {
         let i = self.superblock.free_list_head;
         if self.superblock.free_list_head == self.superblock.bump_index {
-            if self.superblock.bump_index == (self.max_size() + 1) as u32 {
-                panic!("Buffer is full, size {}", self.superblock.size);
+            if self.superblock.bump_index
+                == (self.superblock.num_arenas * BLOCK_SIZE as u32 + 1) as u32
+            {
+                panic!(
+                    "Buffer is full, size {}, time to add a new arena",
+                    self.superblock.size
+                );
             }
             self.superblock.bump_index += 1;
             self.superblock.free_list_head = self.superblock.bump_index;
