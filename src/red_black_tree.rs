@@ -15,6 +15,19 @@ use crate::node_allocator::{
 
 pub const ALIGNMENT: u32 = 8;
 
+/// Pre-allocated capacity for range iterator stack.
+/// 
+/// A balanced red-black tree has a maximum depth of 2 * log₂(n).
+/// 
+/// For our expected use case:
+/// - Total tree size capped at ~10MB
+/// - With 16-byte nodes, this is ~625k nodes maximum
+/// - Maximum tree depth = 2 * log₂(625k) ≈ 40
+/// 
+/// We use 48 to provide headroom and avoid any reallocations even in worst-case
+/// scenarios, while still keeping memory usage minimal (48 * 4 bytes = 192 bytes).
+const RANGE_STACK_CAPACITY: usize = 48;
+
 // Register aliases
 pub const COLOR: u32 = Field::Value as u32;
 
@@ -812,7 +825,7 @@ impl<
         // `start_bound`, pushing the path onto `stack`.
         // This removes the need for the iterator’s first `next()` calls to
         // revisit nodes that are definitely out of range.
-        let mut stack = Vec::with_capacity(32);
+        let mut stack = Vec::with_capacity(RANGE_STACK_CAPACITY);
         let mut current = self.root;
 
         while current != SENTINEL {
