@@ -790,6 +790,7 @@ impl<
     /// - Space complexity: O(log n) for the internal stack
     ///
     /// The iterator performs an in-order traversal, visiting each node in the range exactly once.
+    #[inline]
     pub fn range<R>(&self, range: R) -> Range<'_, K, V, MAX_SIZE>
     where
         R: RangeBounds<K>,
@@ -808,7 +809,7 @@ impl<
 
         // ---- Optimised seek to lower bound ----
         // Walk from the root toward the first element that could satisfy
-        // `start_bound`, pushing the path onto `stack`.  
+        // `start_bound`, pushing the path onto `stack`.
         // This removes the need for the iterator’s first `next()` calls to
         // revisit nodes that are definitely out of range.
         let mut stack = Vec::with_capacity(32);
@@ -835,13 +836,20 @@ impl<
             }
         }
 
+        // Pre-compute end bound check values to avoid repeated work in next()
+        let (end_key, end_inclusive) = match &end_bound {
+            Bound::Included(k) => (Some(*k), true),
+            Bound::Excluded(k) => (Some(*k), false),
+            Bound::Unbounded => (None, false),
+        };
+
         Range {
             tree: self,
             stack,
             // `current` is SENTINEL so `next()` will pop from `stack` first.
             current: SENTINEL,
-            start_bound,
-            end_bound,
+            end_key,
+            end_inclusive,
         }
     }
 }
@@ -1061,8 +1069,9 @@ pub struct Range<
     tree: &'a RedBlackTree<K, V, MAX_SIZE>,
     stack: Vec<u32>,
     current: u32,
-    start_bound: Bound<K>,
-    end_bound: Bound<K>,
+    // Cache the end key to avoid repeated bound checks
+    end_key: Option<K>,
+    end_inclusive: bool,
 }
 
 impl<
@@ -1101,41 +1110,24 @@ impl<
             // Pop from stack
             let node_index = self.stack.pop()?;
             let node = self.tree.get_node(node_index);
-            let key = &node.key;
 
-            // Early exit if we're past the end bound
-            match &self.end_bound {
-                Bound::Included(end) => {
-                    if key > end {
+            // Optimized end bound check using cached values
+            if let Some(end) = self.end_key {
+                if self.end_inclusive {
+                    if node.key > end {
+                        return None;
+                    }
+                } else {
+                    if node.key >= end {
                         return None;
                     }
                 }
-                Bound::Excluded(end) => {
-                    if key >= end {
-                        return None;
-                    }
-                }
-                Bound::Unbounded => {}
             }
 
             // Move to right child for next iteration
             self.current = self.tree.get_right(node_index);
 
-            // Check if we're at or past the start bound
-            // Note: We already filtered out nodes before start during initialization
-            match &self.start_bound {
-                Bound::Unbounded => return Some((key, &node.value)),
-                Bound::Included(start) => {
-                    if key >= start {
-                        return Some((key, &node.value));
-                    }
-                }
-                Bound::Excluded(start) => {
-                    if key > start {
-                        return Some((key, &node.value));
-                    }
-                }
-            }
+            return Some((&node.key, &node.value));
         }
     }
 }

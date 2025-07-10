@@ -422,7 +422,7 @@ mod bench_tests {
     #[bench]
     fn bench_sokoban_red_black_tree_range_10_percent(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
-        let mut buf = vec![0u8; std::mem::size_of::<RBTree>()];
+        let mut buf = vec![0u8; size_of::<RBTree>()];
         let m = RBTree::new_from_slice(buf.as_mut_slice());
         for v in 0..10000 {
             m.insert(v as u128, rng.gen::<u128>());
@@ -450,7 +450,7 @@ mod bench_tests {
     #[bench]
     fn bench_sokoban_red_black_tree_range_small(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
-        let mut buf = vec![0u8; std::mem::size_of::<RBTree>()];
+        let mut buf = vec![0u8; size_of::<RBTree>()];
         let m = RBTree::new_from_slice(buf.as_mut_slice());
         for v in 0..10000 {
             m.insert(v as u128, rng.gen::<u128>());
