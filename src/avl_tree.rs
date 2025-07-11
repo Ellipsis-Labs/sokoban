@@ -250,7 +250,7 @@ impl<
     }
 
     pub fn initialize(&mut self) {
-        self.allocator.initialize(MAX_SIZE);
+        self.allocator.initialize();
     }
 
     pub fn get_node(&self, node: u32) -> &AVLNode<K, V> {

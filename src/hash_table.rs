@@ -216,7 +216,7 @@ impl<
     }
 
     pub fn initialize(&mut self) {
-        self.allocator.initialize(MAX_SIZE);
+        self.allocator.initialize();
     }
 
     pub fn new() -> Self {

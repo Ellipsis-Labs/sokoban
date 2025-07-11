@@ -1,14 +1,12 @@
 mod helper;
 mod multi_arena;
-mod resizable_multi_arena;
 mod simple;
 
 use bytemuck::{Pod, Zeroable};
 
 pub use helper::*;
-pub use multi_arena::{block_size_of, Arena, MultiArenaNodeAllocator, Superblock};
-pub use resizable_multi_arena::{
-    MultiArenaNodeAllocator as ResizableMultiArenaNodeAllocator, Superblock as ResizableSuperblock,
+pub use multi_arena::{
+    max_number_of_nodes_in_block, size_of_nodes, MultiArenaNodeAllocator, Superblock,
 };
 pub use simple::SimpleNodeAllocator;
 
@@ -135,7 +133,7 @@ impl<T: Copy + Clone + Pod + Zeroable + Default, const NUM_REGISTERS: usize>
 pub trait NodeAllocator<T: Copy + Clone + Pod + Zeroable + Default, const NUM_REGISTERS: usize> {
     fn assert_proper_alignment(&self);
 
-    fn initialize(&mut self, max_size: usize);
+    fn initialize(&mut self);
 
     fn get(&self, i: u32) -> &Node<T, NUM_REGISTERS>;
 

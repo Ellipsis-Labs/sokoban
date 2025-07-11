@@ -119,9 +119,8 @@ impl<
         );
     }
 
-    fn initialize(&mut self, max_size: usize) {
+    fn initialize(&mut self) {
         assert!(NUM_REGISTERS >= 1);
-        assert_eq!(max_size, MAX_SIZE);
         self.assert_proper_alignment();
         if self.size == 0 && self.bump_index == 0 && self.free_list_head == 0 {
             self.bump_index = 1;

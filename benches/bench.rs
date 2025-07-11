@@ -6,9 +6,9 @@ extern crate test;
 mod bench_tests {
     use rand::seq::SliceRandom;
     use rand::{self, Rng};
-    use sokoban::node_allocator::FromSlice;
-    use sokoban::node_allocator::NodeAllocatorMap;
-    use sokoban::node_allocator::SimpleNodeAllocator;
+    use sokoban::node_allocator::{size_of_nodes, SimpleNodeAllocator};
+    use sokoban::node_allocator::{FromSlice, MultiArenaNodeAllocator};
+    use sokoban::node_allocator::{NodeAllocatorMap, Superblock};
     use sokoban::red_black_tree::RBNode;
     use sokoban::*;
     use std::collections::BTreeMap;
@@ -33,6 +33,23 @@ mod bench_tests {
     type SHashMap1K = HashTable<u128, u128, NUM_BUCKETS_1K, 2001>;
     type AVLTreeMap1K = AVLTree<u128, u128, 1001>;
     type CritbitTree1K = Critbit<u128, NUM_NODES_1K, 1001>;
+
+    type RBTreeMultiArena<'a> =
+        RedBlackTree<u128, u128, MultiArenaNodeAllocator<'a, RBNode<u128, u128>, 4>, MAX_SIZE>;
+
+    fn prepare_memories_for_multi_arena(
+        num_arenas: usize,
+        per_arena_size: usize,
+    ) -> (Vec<u8>, Vec<Vec<u8>>) {
+        let mut superblock_buf = vec![0u8; std::mem::size_of::<Superblock>()];
+        let arena_bufs =
+            vec![vec![0u8; size_of_nodes::<RBNode<u128, u128>, 4>(per_arena_size)]; num_arenas];
+        {
+            let superblock = Superblock::load_mut_bytes(superblock_buf.as_mut_slice()).unwrap();
+            superblock.initialize(num_arenas, num_arenas * per_arena_size, per_arena_size);
+        }
+        (superblock_buf, arena_bufs)
+    }
 
     #[bench]
     fn bench_std_btree_map_insert_1000_u128(b: &mut Bencher) {
@@ -61,6 +78,25 @@ mod bench_tests {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; std::mem::size_of::<RBTree1K>()];
         let m = RBTree1K::new_from_slice(buf.as_mut_slice());
+        b.iter(|| {
+            for v in 0..1000 {
+                m.insert(v as u128, rng.gen::<u128>());
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_sokoban_red_black_tree_multi_arena_insert_1000_u128(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let (mut superblock_buf, mut arena_bufs) =
+            prepare_memories_for_multi_arena(4, (MAX_SIZE / 4).next_power_of_two());
+        let mut arena_slices: Vec<&mut [u8]> =
+            arena_bufs.iter_mut().map(|a| a.as_mut_slice()).collect();
+        let mut m = RBTreeMultiArena::from_buffers(
+            superblock_buf.as_mut_slice(),
+            arena_slices.as_mut_slice(),
+        );
+        m.initialize();
         b.iter(|| {
             for v in 0..1000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -183,6 +219,25 @@ mod bench_tests {
     }
 
     #[bench]
+    fn bench_sokoban_red_black_tree_multi_arena_insert_20000_u128(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let (mut superblock_buf, mut arena_bufs) =
+            prepare_memories_for_multi_arena(4, (MAX_SIZE / 4).next_power_of_two());
+        let mut arena_slices: Vec<&mut [u8]> =
+            arena_bufs.iter_mut().map(|a| a.as_mut_slice()).collect();
+        let mut m = RBTreeMultiArena::from_buffers(
+            superblock_buf.as_mut_slice(),
+            arena_slices.as_mut_slice(),
+        );
+        m.initialize();
+        b.iter(|| {
+            for v in 0..20000 {
+                m.insert(v as u128, rng.gen::<u128>());
+            }
+        })
+    }
+
+    #[bench]
     fn bench_sokoban_hash_map_insert_20000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; std::mem::size_of::<SHashMap>()];
@@ -255,6 +310,30 @@ mod bench_tests {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; std::mem::size_of::<RBTree>()];
         let m = RBTree::new_from_slice(buf.as_mut_slice());
+        let mut slice: Vec<u128> = (0..1000).collect();
+        slice.shuffle(&mut rng);
+        for v in 0..1000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
+        b.iter(|| {
+            for k in slice.iter() {
+                m.remove(k);
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_sokoban_red_black_tree_multi_arena_remove_1000_u128(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let (mut superblock_buf, mut arena_bufs) =
+            prepare_memories_for_multi_arena(4, (MAX_SIZE / 4).next_power_of_two());
+        let mut arena_slices: Vec<&mut [u8]> =
+            arena_bufs.iter_mut().map(|a| a.as_mut_slice()).collect();
+        let mut m = RBTreeMultiArena::from_buffers(
+            superblock_buf.as_mut_slice(),
+            arena_slices.as_mut_slice(),
+        );
+        m.initialize();
         let mut slice: Vec<u128> = (0..1000).collect();
         slice.shuffle(&mut rng);
         for v in 0..1000 {
@@ -351,6 +430,28 @@ mod bench_tests {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; std::mem::size_of::<RBTree>()];
         let m = RBTree::new_from_slice(buf.as_mut_slice());
+        for v in 0..20000 {
+            m.insert(v as u128, rng.gen::<u128>());
+        }
+        b.iter(|| {
+            for v in 0..20000 {
+                m.get(&v);
+            }
+        })
+    }
+
+    #[bench]
+    fn bench_sokoban_red_black_tree_multi_arena_lookup_20000_u128(b: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let (mut superblock_buf, mut arena_bufs) =
+            prepare_memories_for_multi_arena(4, (MAX_SIZE / 4).next_power_of_two());
+        let mut arena_slices: Vec<&mut [u8]> =
+            arena_bufs.iter_mut().map(|a| a.as_mut_slice()).collect();
+        let mut m = RBTreeMultiArena::from_buffers(
+            superblock_buf.as_mut_slice(),
+            arena_slices.as_mut_slice(),
+        );
+        m.initialize();
         for v in 0..20000 {
             m.insert(v as u128, rng.gen::<u128>());
         }

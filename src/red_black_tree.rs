@@ -78,7 +78,7 @@ pub struct RedBlackTree<
     _phantom: PhantomData<(K, V)>,
 }
 
-// Zeroable, Pod, ZeroCopy and FromSlice can only be implemented for SimpleNodeAllocator
+// SimpleNodeAllocator zero-copy serialization / deserialization
 unsafe impl<
         K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
@@ -116,7 +116,6 @@ impl<
     }
 }
 
-// MultiArena one doesn't have a default constructor, it should be explicitly build
 impl<
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
@@ -138,9 +137,8 @@ impl<
         'a,
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-        const BLOCK_SIZE: usize,
         const MAX_SIZE: usize,
-    > RedBlackTree<K, V, MultiArenaNodeAllocator<'a, RBNode<K, V>, BLOCK_SIZE, 4>, MAX_SIZE>
+    > RedBlackTree<K, V, MultiArenaNodeAllocator<'a, RBNode<K, V>, 4>, MAX_SIZE>
 {
     pub fn from_buffers(
         superblock_buffer: &'a mut [u8],
@@ -358,7 +356,7 @@ impl<
 
     #[inline(always)]
     pub fn initialize(&mut self) {
-        self.allocator.initialize(MAX_SIZE);
+        self.allocator.initialize();
     }
 
     pub fn get_node(&self, node: u32) -> &RBNode<K, V> {
@@ -1021,13 +1019,10 @@ mod test {
 
     use super::*;
 
-    use crate::node_allocator::{MultiArenaNodeAllocator, SimpleNodeAllocator};
+    use crate::node_allocator::SimpleNodeAllocator;
 
     type SimpleRedBlackTree<const SIZE: usize> =
         RedBlackTree<u64, u64, SimpleNodeAllocator<RBNode<u64, u64>, SIZE, 4>, SIZE>;
-
-    type MultiArenaRedBlackTree<'a, const SIZE: usize> =
-        RedBlackTree<u64, u64, MultiArenaNodeAllocator<'a, RBNode<u64, u64>, SIZE, 4>, SIZE>;
 
     #[test]
     /// This test addresses the case where a node's parent and uncle are both red.

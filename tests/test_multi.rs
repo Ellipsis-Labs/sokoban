@@ -7,16 +7,17 @@ use rand::rngs::ThreadRng;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use rand::{self, Rng};
-use sokoban::node_allocator::block_size_of;
-use sokoban::node_allocator::Arena;
+use sokoban::node_allocator::max_number_of_nodes_in_block;
+use sokoban::node_allocator::size_of_nodes;
 use sokoban::node_allocator::MultiArenaNodeAllocator;
+use sokoban::node_allocator::Node;
 use sokoban::node_allocator::NodeAllocatorMap;
 use sokoban::node_allocator::Superblock;
 use sokoban::red_black_tree::RBNode;
 use sokoban::*;
 use std::collections::BTreeMap;
 
-const MAX_SIZE: usize = 200000;
+const MAX_SIZE: usize = 32 * 1024;
 
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
@@ -280,35 +281,139 @@ fn simulate<K: std::fmt::Debug + Clone + Copy + Zeroable + Pod + Ord, T>(
     println!("{} Size: {}", std::any::type_name::<T>(), tree.len(),);
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_simulate_red_black_tree() {
+#[test]
+fn test_node_number_calculation() {
     const TEN_MILLION: usize = 10 * 1024 * 1024;
-    const BLOCK_SIZE: usize = block_size_of::<RBNode<u64, Widget>, 4, TEN_MILLION>();
+    const BLOCK_SIZE: usize = max_number_of_nodes_in_block::<RBNode<u64, Widget>, 4>(TEN_MILLION);
     assert_eq!(
-        std::mem::size_of::<Arena<RBNode<u64, Widget>, BLOCK_SIZE, 4>>(),
+        size_of_nodes::<RBNode<u64, Widget>, 4>(BLOCK_SIZE),
         TEN_MILLION
     );
+    assert_eq!(
+        std::mem::size_of::<[Node<RBNode<u64, Widget>, 4>; BLOCK_SIZE]>(),
+        TEN_MILLION
+    );
+}
 
-    type RBTree<'a> = RedBlackTree<
-        u64,
-        Widget,
-        MultiArenaNodeAllocator<'a, RBNode<u64, Widget>, BLOCK_SIZE, 4>,
-        MAX_SIZE,
-    >;
+#[tokio::test(flavor = "multi_thread")]
+async fn test_simulate_red_black_tree() {
+    type RBTree<'a> =
+        RedBlackTree<u64, Widget, MultiArenaNodeAllocator<'a, RBNode<u64, Widget>, 4>, MAX_SIZE>;
 
-    // initialize it with 4 arenas
+    // 4 arenas (4000, 4000, 4000, 4000)
     let mut header_buf = vec![0u8; std::mem::size_of::<Superblock>()];
-    let mut arena_buf =
-        vec![vec![0u8; std::mem::size_of::<Arena<RBNode<u64, Widget>, BLOCK_SIZE, 4>>()]; 2];
+    let mut arena_buf = vec![vec![0u8; size_of_nodes::<RBNode<u64, Widget>, 4>(MAX_SIZE / 4)]; 4];
 
-    for arena in arena_buf.iter() {
-        assert_eq!(arena.len(), TEN_MILLION);
+    let mut arena_slices: Vec<&mut [u8]> = arena_buf.iter_mut().map(|a| a.as_mut_slice()).collect();
+
+    {
+        let superblock = Superblock::load_mut_bytes(header_buf.as_mut_slice())
+            .expect("Failed to load superblock");
+        superblock.initialize(4, MAX_SIZE, MAX_SIZE / 4);
     }
 
-    // To avoid lifetime issues, create arena_slices outside the call and pass a mutable slice reference
-    let mut arena_slices: Vec<&mut [u8]> = arena_buf.iter_mut().map(|a| a.as_mut_slice()).collect();
     let mut tree = RBTree::from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
     tree.initialize();
     println!("Tree initialized");
+    assert_eq!(tree.allocator.superblock.num_active_arenas, 4);
+    assert_eq!(tree.allocator.arenas.len(), 4);
+    assert_eq!(tree.allocator.superblock.max_size, MAX_SIZE as u32);
     simulate::<u64, RBTree>(true, &mut tree);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_simulate_red_black_tree_with_partial_arenas() {
+    type RBTree<'a> =
+        RedBlackTree<u64, Widget, MultiArenaNodeAllocator<'a, RBNode<u64, Widget>, 4>, MAX_SIZE>;
+
+    // 4 arenas (6000, 6000, 6000, 2000)
+    let mut header_buf = vec![0u8; std::mem::size_of::<Superblock>()];
+    let mut arena_buf = vec![vec![0u8; size_of_nodes::<RBNode<u64, Widget>, 4>(6000)]; 3];
+    arena_buf.push(vec![0u8; size_of_nodes::<RBNode<u64, Widget>, 4>(2000)]);
+
+    let mut arena_slices: Vec<&mut [u8]> = arena_buf.iter_mut().map(|a| a.as_mut_slice()).collect();
+
+    {
+        let superblock = Superblock::load_mut_bytes(header_buf.as_mut_slice())
+            .expect("Failed to load superblock");
+        superblock.initialize(4, MAX_SIZE, 6000);
+    }
+
+    let mut tree = RBTree::from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
+    tree.initialize();
+    println!("Tree initialized");
+    assert_eq!(tree.allocator.superblock.num_active_arenas, 4);
+    assert_eq!(tree.allocator.arenas.len(), 4);
+    assert_eq!(tree.allocator.superblock.max_size, MAX_SIZE as u32);
+    simulate::<u64, RBTree>(true, &mut tree);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_simulate_red_black_tree_with_resize_up() {
+    type RBTree<'a> =
+        RedBlackTree<u64, Widget, MultiArenaNodeAllocator<'a, RBNode<u64, Widget>, 4>, MAX_SIZE>;
+
+    // 4 arenas (6000, 6000, 6000, 2000)
+    let mut header_buf = vec![0u8; std::mem::size_of::<Superblock>()];
+    let mut arena_buf = vec![vec![0u8; size_of_nodes::<RBNode<u64, Widget>, 4>(6000)]; 3];
+    arena_buf.push(vec![0u8; size_of_nodes::<RBNode<u64, Widget>, 4>(2000)]);
+
+    {
+        let superblock = Superblock::load_mut_bytes(header_buf.as_mut_slice())
+            .expect("Failed to load superblock");
+        superblock.initialize(4, MAX_SIZE, 6000);
+    }
+
+    {
+        let superblock = Superblock::load_mut_bytes(header_buf.as_mut_slice())
+            .expect("Failed to load superblock");
+        println!("Superblock: {:#?}", superblock);
+    }
+
+    let sampled_key_val = {
+        let mut arena_slices: Vec<&mut [u8]> =
+            arena_buf.iter_mut().map(|a| a.as_mut_slice()).collect();
+        let mut tree = RBTree::from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
+        tree.initialize();
+        println!("Tree initialized");
+        assert_eq!(tree.allocator.superblock.num_active_arenas, 4);
+        assert_eq!(tree.allocator.arenas.len(), 4);
+        assert_eq!(tree.allocator.superblock.max_size, 20000 as u32);
+        simulate::<u64, RBTree>(true, &mut tree);
+
+        let sampled_key_val = tree
+            .iter()
+            .take(100)
+            .map(|(k, v)| (*k, *v))
+            .collect::<Vec<_>>();
+
+        println!(
+            "Superblock before dropping tree: {:#?}",
+            tree.allocator.superblock
+        );
+
+        for (key, val) in sampled_key_val.iter() {
+            assert_eq!(tree.get(key), Some(val));
+        }
+
+        drop(tree);
+
+        sampled_key_val
+    };
+
+    {
+        println!("Resizing up");
+        arena_buf[3].resize(size_of_nodes::<RBNode<u64, Widget>, 4>(4000), 0);
+        let mut arena_slices: Vec<&mut [u8]> =
+            arena_buf.iter_mut().map(|a| a.as_mut_slice()).collect();
+
+        let tree = RBTree::from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
+        assert_eq!(tree.allocator.superblock.num_active_arenas, 4);
+        assert_eq!(tree.allocator.arenas.len(), 4);
+        assert_eq!(tree.allocator.superblock.max_size, 22000 as u32);
+
+        for (key, val) in sampled_key_val {
+            assert_eq!(tree.get(&key), Some(&val));
+        }
+    }
 }
