@@ -4,14 +4,16 @@ use num_traits::FromPrimitive;
 use std::{
     cmp::Ordering,
     fmt::Debug,
-    marker::PhantomData,
     ops::{Index, IndexMut},
     vec,
 };
 
-use crate::node_allocator::{
-    FromSlice, MultiArenaNodeAllocator, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap,
-    SimpleNodeAllocator, TreeField as Field, ZeroCopy, SENTINEL,
+use crate::{
+    node_allocator::{
+        NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap, TreeField as Field, ZeroCopy,
+        SENTINEL,
+    },
+    traits::Container,
 };
 
 pub const ALIGNMENT: u32 = 8;
@@ -66,101 +68,28 @@ impl<
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct RedBlackTree<
+pub struct RedBlackTreeHeader {
+    pub root: u32,
+    _padding: [u32; 3],
+}
+
+unsafe impl Zeroable for RedBlackTreeHeader {}
+unsafe impl Pod for RedBlackTreeHeader {}
+impl ZeroCopy for RedBlackTreeHeader {}
+
+pub type RedBlackTree<
+    'a,
     K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
     Allocator: NodeAllocator<RBNode<K, V>, 4>,
-    const MAX_SIZE: usize,
-> {
-    pub root: u32,
-    _padding: [u32; 3],
-    pub allocator: Allocator,
-    _phantom: PhantomData<(K, V)>,
-}
-
-// SimpleNodeAllocator zero-copy serialization / deserialization
-unsafe impl<
-        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > Zeroable for RedBlackTree<K, V, SimpleNodeAllocator<RBNode<K, V>, MAX_SIZE, 4>, MAX_SIZE>
-{
-}
-unsafe impl<
-        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > Pod for RedBlackTree<K, V, SimpleNodeAllocator<RBNode<K, V>, MAX_SIZE, 4>, MAX_SIZE>
-{
-}
-
-impl<
-        K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > ZeroCopy for RedBlackTree<K, V, SimpleNodeAllocator<RBNode<K, V>, MAX_SIZE, 4>, MAX_SIZE>
-{
-}
-
-impl<
-        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > FromSlice for RedBlackTree<K, V, SimpleNodeAllocator<RBNode<K, V>, MAX_SIZE, 4>, MAX_SIZE>
-{
-    fn new_from_slice(slice: &mut [u8]) -> &mut Self {
-        Self::assert_proper_alignment();
-        let tree = Self::load_mut_bytes(slice).unwrap();
-        tree.initialize();
-        tree
-    }
-}
-
-impl<
-        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > Default for RedBlackTree<K, V, SimpleNodeAllocator<RBNode<K, V>, MAX_SIZE, 4>, MAX_SIZE>
-{
-    fn default() -> Self {
-        Self::assert_proper_alignment();
-        RedBlackTree {
-            root: SENTINEL,
-            _padding: [0; 3],
-            allocator: SimpleNodeAllocator::default(),
-            _phantom: PhantomData,
-        }
-    }
-}
+> = Container<'a, RedBlackTreeHeader, RBNode<K, V>, Allocator, 4>;
 
 impl<
         'a,
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > RedBlackTree<K, V, MultiArenaNodeAllocator<'a, RBNode<K, V>, 4>, MAX_SIZE>
-{
-    pub fn from_buffers(
-        superblock_buffer: &'a mut [u8],
-        arena_buffers: &'a mut [&'a mut [u8]],
-    ) -> Self {
-        Self::assert_proper_alignment();
-        let allocator = MultiArenaNodeAllocator::from_buffers(superblock_buffer, arena_buffers);
-        Self {
-            root: SENTINEL,
-            _padding: [0; 3],
-            allocator,
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<
-        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
         Allocator: NodeAllocator<RBNode<K, V>, 4>,
-        const MAX_SIZE: usize,
-    > NodeAllocatorMap<K, V> for RedBlackTree<K, V, Allocator, MAX_SIZE>
+    > NodeAllocatorMap<K, V> for RedBlackTree<'a, K, V, Allocator>
 {
     fn insert(&mut self, key: K, value: V) -> Option<u32> {
         self._insert(key, value)
@@ -201,7 +130,7 @@ impl<
     }
 
     fn capacity(&self) -> usize {
-        MAX_SIZE
+        self.allocator.capacity()
     }
 
     fn iter(&self) -> Box<dyn DoubleEndedIterator<Item = (&K, &V)> + '_> {
@@ -209,16 +138,24 @@ impl<
     }
 
     fn iter_mut(&mut self) -> Box<dyn DoubleEndedIterator<Item = (&K, &mut V)> + '_> {
-        Box::new(self._iter_mut())
+        // SAFETY: The trait requires lifetime '_ but we need to return references with lifetime 'a.
+        // This is safe because 'a outlives the iterator lifetime.
+        unsafe {
+            let iter = self._iter_mut();
+            std::mem::transmute::<
+                Box<dyn DoubleEndedIterator<Item = (&K, &mut V)> + '_>,
+                Box<dyn DoubleEndedIterator<Item = (&K, &mut V)> + '_>,
+            >(Box::new(iter))
+        }
     }
 }
 
 impl<
+        'a,
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         Allocator: NodeAllocator<RBNode<K, V>, 4>,
-        const MAX_SIZE: usize,
-    > OrderedNodeAllocatorMap<K, V> for RedBlackTree<K, V, Allocator, MAX_SIZE>
+    > OrderedNodeAllocatorMap<K, V> for RedBlackTree<'a, K, V, Allocator>
 {
     fn get_min_index(&mut self) -> u32 {
         self._find_min(self.root)
@@ -250,22 +187,11 @@ impl<
 }
 
 impl<
-        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > RedBlackTree<K, V, SimpleNodeAllocator<RBNode<K, V>, MAX_SIZE, 4>, MAX_SIZE>
-{
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl<
+        'a,
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         Allocator: NodeAllocator<RBNode<K, V>, 4>,
-        const MAX_SIZE: usize,
-    > RedBlackTree<K, V, Allocator, MAX_SIZE>
+    > RedBlackTree<'a, K, V, Allocator>
 {
     pub fn pretty_print(&self) {
         if self.len() == 0 {
@@ -758,8 +684,11 @@ impl<
         node
     }
 
-    fn _iter(&self) -> RedBlackTreeIterator<'_, K, V, Allocator, MAX_SIZE> {
-        RedBlackTreeIterator::<K, V, Allocator, MAX_SIZE> {
+    fn _iter<'tree>(&'tree self) -> RedBlackTreeIterator<'tree, K, V, Allocator>
+    where
+        'a: 'tree,
+    {
+        RedBlackTreeIterator::<K, V, Allocator> {
             tree: self,
             fwd_stack: vec![],
             fwd_ptr: self.root,
@@ -771,9 +700,12 @@ impl<
         }
     }
 
-    fn _iter_mut(&mut self) -> RedBlackTreeIteratorMut<'_, K, V, Allocator, MAX_SIZE> {
+    fn _iter_mut<'tree>(&'tree mut self) -> RedBlackTreeIteratorMut<'tree, 'a, K, V, Allocator>
+    where
+        'a: 'tree,
+    {
         let node = self.root;
-        RedBlackTreeIteratorMut::<K, V, Allocator, MAX_SIZE> {
+        RedBlackTreeIteratorMut::<'tree, 'a, K, V, Allocator> {
             tree: self,
             fwd_stack: vec![],
             fwd_ptr: node,
@@ -786,44 +718,39 @@ impl<
     }
 }
 
-impl<
-        'a,
-        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        Allocator: NodeAllocator<RBNode<K, V>, 4>,
-        const MAX_SIZE: usize,
-    > IntoIterator for &'a RedBlackTree<K, V, Allocator, MAX_SIZE>
+impl<'a, K, V, Allocator> IntoIterator for &'a RedBlackTree<'a, K, V, Allocator>
+where
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    Allocator: NodeAllocator<RBNode<K, V>, 4>,
 {
     type Item = (&'a K, &'a V);
-    type IntoIter = RedBlackTreeIterator<'a, K, V, Allocator, MAX_SIZE>;
+    type IntoIter = RedBlackTreeIterator<'a, K, V, Allocator>;
     fn into_iter(self) -> Self::IntoIter {
         self._iter()
     }
 }
 
-impl<
-        'a,
-        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        Allocator: NodeAllocator<RBNode<K, V>, 4>,
-        const MAX_SIZE: usize,
-    > IntoIterator for &'a mut RedBlackTree<K, V, Allocator, MAX_SIZE>
+impl<'a, K, V, Allocator> IntoIterator for &'a mut RedBlackTree<'a, K, V, Allocator>
+where
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    Allocator: NodeAllocator<RBNode<K, V>, 4>,
 {
     type Item = (&'a K, &'a mut V);
-    type IntoIter = RedBlackTreeIteratorMut<'a, K, V, Allocator, MAX_SIZE>;
+    type IntoIter = RedBlackTreeIteratorMut<'a, 'a, K, V, Allocator>;
     fn into_iter(self) -> Self::IntoIter {
         self._iter_mut()
     }
 }
 
-pub struct RedBlackTreeIterator<
-    'a,
+pub struct RedBlackTreeIterator<'tree, K, V, Allocator>
+where
     K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
     Allocator: NodeAllocator<RBNode<K, V>, 4>,
-    const MAX_SIZE: usize,
-> {
-    tree: &'a RedBlackTree<K, V, Allocator, MAX_SIZE>,
+{
+    tree: &'tree RedBlackTree<'tree, K, V, Allocator>,
     fwd_stack: Vec<u32>,
     fwd_ptr: u32,
     fwd_node: Option<u32>,
@@ -833,13 +760,11 @@ pub struct RedBlackTreeIterator<
     terminated: bool,
 }
 
-impl<
-        'a,
-        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        Allocator: NodeAllocator<RBNode<K, V>, 4>,
-        const MAX_SIZE: usize,
-    > Iterator for RedBlackTreeIterator<'a, K, V, Allocator, MAX_SIZE>
+impl<'a, K, V, Allocator> Iterator for RedBlackTreeIterator<'a, K, V, Allocator>
+where
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    Allocator: NodeAllocator<RBNode<K, V>, 4>,
 {
     type Item = (&'a K, &'a V);
 
@@ -864,13 +789,11 @@ impl<
     }
 }
 
-impl<
-        'a,
-        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        Allocator: NodeAllocator<RBNode<K, V>, 4>,
-        const MAX_SIZE: usize,
-    > DoubleEndedIterator for RedBlackTreeIterator<'a, K, V, Allocator, MAX_SIZE>
+impl<'a, K, V, Allocator> DoubleEndedIterator for RedBlackTreeIterator<'a, K, V, Allocator>
+where
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    Allocator: NodeAllocator<RBNode<K, V>, 4>,
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         while !self.terminated && (!self.rev_stack.is_empty() || self.rev_ptr != SENTINEL) {
@@ -893,14 +816,14 @@ impl<
     }
 }
 
-pub struct RedBlackTreeIteratorMut<
-    'a,
+pub struct RedBlackTreeIteratorMut<'tree, 'a, K, V, Allocator>
+where
     K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
     Allocator: NodeAllocator<RBNode<K, V>, 4>,
-    const MAX_SIZE: usize,
-> {
-    tree: &'a mut RedBlackTree<K, V, Allocator, MAX_SIZE>,
+    'a: 'tree,
+{
+    tree: &'tree mut RedBlackTree<'a, K, V, Allocator>,
     fwd_stack: Vec<u32>,
     fwd_ptr: u32,
     fwd_node: Option<u32>,
@@ -910,13 +833,12 @@ pub struct RedBlackTreeIteratorMut<
     terminated: bool,
 }
 
-impl<
-        'a,
-        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        Allocator: NodeAllocator<RBNode<K, V>, 4>,
-        const MAX_SIZE: usize,
-    > Iterator for RedBlackTreeIteratorMut<'a, K, V, Allocator, MAX_SIZE>
+impl<'tree, 'a, K, V, Allocator> Iterator for RedBlackTreeIteratorMut<'tree, 'a, K, V, Allocator>
+where
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    Allocator: NodeAllocator<RBNode<K, V>, 4>,
+    'a: 'tree,
 {
     type Item = (&'a K, &'a mut V);
 
@@ -950,13 +872,13 @@ impl<
     }
 }
 
-impl<
-        'a,
-        K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        Allocator: NodeAllocator<RBNode<K, V>, 4>,
-        const MAX_SIZE: usize,
-    > DoubleEndedIterator for RedBlackTreeIteratorMut<'a, K, V, Allocator, MAX_SIZE>
+impl<'tree, 'a, K, V, Allocator> DoubleEndedIterator
+    for RedBlackTreeIteratorMut<'tree, 'a, K, V, Allocator>
+where
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    Allocator: NodeAllocator<RBNode<K, V>, 4>,
+    'a: 'tree,
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         while !self.terminated && (!self.rev_stack.is_empty() || self.rev_ptr != SENTINEL) {
@@ -989,11 +911,11 @@ impl<
 }
 
 impl<
+        'a,
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         Allocator: NodeAllocator<RBNode<K, V>, 4>,
-        const MAX_SIZE: usize,
-    > Index<&K> for RedBlackTree<K, V, Allocator, MAX_SIZE>
+    > Index<&K> for RedBlackTree<'a, K, V, Allocator>
 {
     type Output = V;
 
@@ -1003,11 +925,11 @@ impl<
 }
 
 impl<
+        'a,
         K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         Allocator: NodeAllocator<RBNode<K, V>, 4>,
-        const MAX_SIZE: usize,
-    > IndexMut<&K> for RedBlackTree<K, V, Allocator, MAX_SIZE>
+    > IndexMut<&K> for RedBlackTree<'a, K, V, Allocator>
 {
     fn index_mut(&mut self, index: &K) -> &mut Self::Output {
         self.get_mut(index).unwrap()
@@ -1017,20 +939,24 @@ impl<
 #[cfg(test)]
 mod test {
 
+    use std::{
+        collections::BTreeMap,
+        hash::{DefaultHasher, Hash, Hasher},
+    };
+
     use super::*;
 
     use crate::node_allocator::SimpleNodeAllocator;
 
-    type SimpleRedBlackTree<const SIZE: usize> =
-        RedBlackTree<u64, u64, SimpleNodeAllocator<RBNode<u64, u64>, SIZE, 4>, SIZE>;
+    type SimpleRedBlackTree<'a, const SIZE: usize> =
+        RedBlackTree<'a, u64, u64, SimpleNodeAllocator<RBNode<u64, u64>, SIZE, 4>>;
 
     #[test]
-    /// This test addresses the case where a node's parent and uncle are both red.
-    /// This is resolved by coloring the parent and uncle black and the grandparent red.
     fn test_insert_with_red_parent_and_uncle() {
-        type Rbt = SimpleRedBlackTree<1024>;
-        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        type Rbt<'a> = SimpleRedBlackTree<'a, 1024>;
+        let mut buf = vec![0u8; Rbt::size_of_buffer()];
+        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
+        tree.initialize();
         let addrs = vec![
             tree.insert(61, 0).unwrap(),
             tree.insert(52, 0).unwrap(),
@@ -1068,18 +994,11 @@ mod test {
     }
 
     #[test]
-    /// This test addresses the case where a node's parent (P) is red and uncle is black.
-    /// The new leaf (L) is the right child of the parent and the parent is the right
-    /// child of the grandparent (G).
-    ///
-    /// "P is right child of G and L is right child of P."
-    ///
-    /// We resolve this by rotating the grandparent left and then
-    /// fixing the colors.
     fn test_right_insert_with_red_right_child_parent_and_black_uncle() {
-        type Rbt = SimpleRedBlackTree<1024>;
-        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        type Rbt<'a> = SimpleRedBlackTree<'a, 1024>;
+        let mut buf = vec![0u8; Rbt::size_of_buffer()];
+        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
+        tree.initialize();
         let addrs = vec![
             tree.insert(61, 0).unwrap(),
             tree.insert(52, 0).unwrap(),
@@ -1121,18 +1040,11 @@ mod test {
     }
 
     #[test]
-    /// This test addresses the case where a node's parent is red and uncle is black.
-    /// The new leaf is the left child of the parent and the parent is the right
-    /// child of the grandparent.
-    ///
-    /// "P is right child of G and L is left child of P."
-    ///
-    /// We resolve this by rotating the parent right then applying the same
-    /// algorithm as the previous test.
     fn test_left_insert_with_red_right_child_parent_and_black_uncle() {
-        type Rbt = SimpleRedBlackTree<1024>;
-        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        type Rbt<'a> = SimpleRedBlackTree<'a, 1024>;
+        let mut buf = vec![0u8; Rbt::size_of_buffer()];
+        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
+        tree.initialize();
         let addrs = vec![
             tree.insert(61, 0).unwrap(),
             tree.insert(52, 0).unwrap(),
@@ -1174,18 +1086,11 @@ mod test {
     }
 
     #[test]
-    /// This test addresses the case where a node's parent is red and uncle is black.
-    /// The new leaf is the left child of the parent and the parent is the left
-    /// child of the grandparent.
-    ///
-    /// "P is left child of G and L is left child of P."
-    ///
-    /// We resolve this by rotating the grandparent right and then
-    /// fixing the colors.
     fn test_left_insert_with_red_left_child_parent_and_black_uncle() {
-        type Rbt = SimpleRedBlackTree<1024>;
-        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        type Rbt<'a> = SimpleRedBlackTree<'a, 1024>;
+        let mut buf = vec![0u8; Rbt::size_of_buffer()];
+        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
+        tree.initialize();
         let addrs = vec![
             tree.insert(61, 0).unwrap(),
             tree.insert(85, 0).unwrap(),
@@ -1227,18 +1132,11 @@ mod test {
     }
 
     #[test]
-    /// This test addresses the case where a node's parent is red and uncle is black.
-    /// The new leaf is the right child of the parent and the parent is the left
-    /// child of the grandparent.
-    ///
-    /// "P is left child of G and L is right child of P."
-    ///
-    /// We resolve this by rotating the parent left then applying the same
-    /// algorithm as the previous test.
     fn test_right_insert_with_red_left_child_parent_and_black_uncle() {
-        type Rbt = SimpleRedBlackTree<1024>;
-        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        type Rbt<'a> = SimpleRedBlackTree<'a, 1024>;
+        let mut buf = vec![0u8; Rbt::size_of_buffer()];
+        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
+        tree.initialize();
         let addrs = vec![
             tree.insert(61, 0).unwrap(),
             tree.insert(85, 0).unwrap(),
@@ -1283,11 +1181,10 @@ mod test {
     /// Test a power of 2 minus 1
     #[test]
     fn test_delete_multiple_random_1023() {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        type Rbt = SimpleRedBlackTree<1023>;
-        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        type Rbt<'a> = SimpleRedBlackTree<'a, 1023>;
+        let mut buf = vec![0u8; Rbt::size_of_buffer()];
+        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
+        tree.initialize();
         let mut keys = vec![];
         // Fill up tree
         for k in 0..1023 {
@@ -1307,11 +1204,10 @@ mod test {
 
     #[test]
     fn test_delete_multiple_random_1024() {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        type Rbt = SimpleRedBlackTree<1024>;
-        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        type Rbt<'a> = SimpleRedBlackTree<'a, 1024>;
+        let mut buf = vec![0u8; Rbt::size_of_buffer()];
+        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
+        tree.initialize();
         let mut keys = vec![];
         let mut addrs = vec![];
         // Fill up tree
@@ -1336,11 +1232,10 @@ mod test {
 
     #[test]
     fn test_delete_multiple_random_2048() {
-        use std::collections::{hash_map::DefaultHasher, BTreeMap};
-        use std::hash::{Hash, Hasher};
-        type Rbt = SimpleRedBlackTree<2048>;
-        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        type Rbt<'a> = SimpleRedBlackTree<'a, 2048>;
+        let mut buf = vec![0u8; Rbt::size_of_buffer()];
+        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
+        tree.initialize();
         let mut keys = vec![];
         // Fill up tree
         for k in 0..2048 {
@@ -1357,8 +1252,9 @@ mod test {
             .map(|(i, k)| (*k, i as u64))
             .collect::<BTreeMap<_, _>>();
 
-        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-        let index_tree = Rbt::new_from_slice(buf.as_mut_slice());
+        let mut buf = vec![0u8; Rbt::size_of_buffer()];
+        let mut index_tree = Rbt::load_from_buffer(buf.as_mut_slice());
+        index_tree.initialize();
         let mut index_keys = vec![];
 
         for k in keys.iter() {
@@ -1376,11 +1272,10 @@ mod test {
 
     #[test]
     fn test_delete_multiple_random_512() {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        type Rbt = SimpleRedBlackTree<512>;
-        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        type Rbt<'a> = SimpleRedBlackTree<'a, 512>;
+        let mut buf = vec![0u8; Rbt::size_of_buffer()];
+        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
+        tree.initialize();
         let mut keys = vec![];
         // Fill up tree
         for k in 0..512 {
@@ -1399,11 +1294,10 @@ mod test {
 
     #[test]
     fn test_delete_multiple_random_4098() {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        type Rbt = SimpleRedBlackTree<4098>;
-        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        type Rbt<'a> = SimpleRedBlackTree<'a, 4098>;
+        let mut buf = vec![0u8; Rbt::size_of_buffer()];
+        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
+        tree.initialize();
         let mut keys = vec![];
         // Fill up tree
         for k in 0..4098 {
@@ -1422,9 +1316,10 @@ mod test {
 
     #[test]
     fn remove_root() {
-        type Rbt = SimpleRedBlackTree<4098>;
-        let mut buf = vec![0u8; std::mem::size_of::<Rbt>()];
-        let tree = Rbt::new_from_slice(buf.as_mut_slice());
+        type Rbt<'a> = SimpleRedBlackTree<'a, 4098>;
+        let mut buf = vec![0u8; Rbt::size_of_buffer()];
+        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
+        tree.initialize();
 
         // Returns none when empty
         assert!(tree.remove_root().is_none());

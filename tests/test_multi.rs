@@ -17,7 +17,7 @@ use sokoban::red_black_tree::RBNode;
 use sokoban::*;
 use std::collections::BTreeMap;
 
-const MAX_SIZE: usize = 32 * 1024;
+const MAX_SIZE: usize = 20000;
 
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
@@ -298,10 +298,10 @@ fn test_node_number_calculation() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_simulate_red_black_tree() {
     type RBTree<'a> =
-        RedBlackTree<u64, Widget, MultiArenaNodeAllocator<'a, RBNode<u64, Widget>, 4>, MAX_SIZE>;
+        RedBlackTree<'a, u64, Widget, MultiArenaNodeAllocator<'a, RBNode<u64, Widget>, 4>>;
 
     // 4 arenas (4000, 4000, 4000, 4000)
-    let mut header_buf = vec![0u8; std::mem::size_of::<Superblock>()];
+    let mut header_buf = vec![0u8; RBTree::size_of_header()];
     let mut arena_buf = vec![vec![0u8; size_of_nodes::<RBNode<u64, Widget>, 4>(MAX_SIZE / 4)]; 4];
 
     let mut arena_slices: Vec<&mut [u8]> = arena_buf.iter_mut().map(|a| a.as_mut_slice()).collect();
@@ -312,7 +312,8 @@ async fn test_simulate_red_black_tree() {
         superblock.initialize(4, MAX_SIZE, MAX_SIZE / 4);
     }
 
-    let mut tree = RBTree::from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
+    let mut tree =
+        RBTree::load_from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
     tree.initialize();
     println!("Tree initialized");
     assert_eq!(tree.allocator.superblock.num_active_arenas, 4);
@@ -324,10 +325,10 @@ async fn test_simulate_red_black_tree() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_simulate_red_black_tree_with_partial_arenas() {
     type RBTree<'a> =
-        RedBlackTree<u64, Widget, MultiArenaNodeAllocator<'a, RBNode<u64, Widget>, 4>, MAX_SIZE>;
+        RedBlackTree<'a, u64, Widget, MultiArenaNodeAllocator<'a, RBNode<u64, Widget>, 4>>;
 
     // 4 arenas (6000, 6000, 6000, 2000)
-    let mut header_buf = vec![0u8; std::mem::size_of::<Superblock>()];
+    let mut header_buf = vec![0u8; RBTree::size_of_header()];
     let mut arena_buf = vec![vec![0u8; size_of_nodes::<RBNode<u64, Widget>, 4>(6000)]; 3];
     arena_buf.push(vec![0u8; size_of_nodes::<RBNode<u64, Widget>, 4>(2000)]);
 
@@ -339,7 +340,8 @@ async fn test_simulate_red_black_tree_with_partial_arenas() {
         superblock.initialize(4, MAX_SIZE, 6000);
     }
 
-    let mut tree = RBTree::from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
+    let mut tree =
+        RBTree::load_from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
     tree.initialize();
     println!("Tree initialized");
     assert_eq!(tree.allocator.superblock.num_active_arenas, 4);
@@ -351,10 +353,10 @@ async fn test_simulate_red_black_tree_with_partial_arenas() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_simulate_red_black_tree_with_resize_up() {
     type RBTree<'a> =
-        RedBlackTree<u64, Widget, MultiArenaNodeAllocator<'a, RBNode<u64, Widget>, 4>, MAX_SIZE>;
+        RedBlackTree<'a, u64, Widget, MultiArenaNodeAllocator<'a, RBNode<u64, Widget>, 4>>;
 
     // 4 arenas (6000, 6000, 6000, 2000)
-    let mut header_buf = vec![0u8; std::mem::size_of::<Superblock>()];
+    let mut header_buf = vec![0u8; RBTree::size_of_header()];
     let mut arena_buf = vec![vec![0u8; size_of_nodes::<RBNode<u64, Widget>, 4>(6000)]; 3];
     arena_buf.push(vec![0u8; size_of_nodes::<RBNode<u64, Widget>, 4>(2000)]);
 
@@ -373,7 +375,8 @@ async fn test_simulate_red_black_tree_with_resize_up() {
     let sampled_key_val = {
         let mut arena_slices: Vec<&mut [u8]> =
             arena_buf.iter_mut().map(|a| a.as_mut_slice()).collect();
-        let mut tree = RBTree::from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
+        let mut tree =
+            RBTree::load_from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
         tree.initialize();
         println!("Tree initialized");
         assert_eq!(tree.allocator.superblock.num_active_arenas, 4);
@@ -407,7 +410,8 @@ async fn test_simulate_red_black_tree_with_resize_up() {
         let mut arena_slices: Vec<&mut [u8]> =
             arena_buf.iter_mut().map(|a| a.as_mut_slice()).collect();
 
-        let tree = RBTree::from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
+        let tree =
+            RBTree::load_from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
         assert_eq!(tree.allocator.superblock.num_active_arenas, 4);
         assert_eq!(tree.allocator.arenas.len(), 4);
         assert_eq!(tree.allocator.superblock.max_size, 22000 as u32);

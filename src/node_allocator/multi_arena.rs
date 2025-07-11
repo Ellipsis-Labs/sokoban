@@ -97,8 +97,11 @@ pub struct MultiArenaNodeAllocator<
 impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const NUM_REGISTERS: usize>
     MultiArenaNodeAllocator<'a, T, NUM_REGISTERS>
 {
-    fn new(superblock: &'a mut Superblock, arenas: Vec<&'a mut [Node<T, NUM_REGISTERS>]>) -> Self {
-        Self { superblock, arenas }
+    fn new(
+        superblock: &'a mut Superblock,
+        arenas: Vec<&'a mut [Node<T, NUM_REGISTERS>]>,
+    ) -> &'a mut Self {
+        Box::leak(Box::new(Self { superblock, arenas }))
     }
 
     #[inline(always)]
@@ -114,7 +117,7 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const NUM_REGISTERS: usize>
     pub fn from_buffers(
         superblock_buffer: &'a mut [u8],
         arena_buffers: &'a mut [&'a mut [u8]],
-    ) -> Self {
+    ) -> &'a mut Self {
         let superblock = Superblock::load_mut_bytes(superblock_buffer)
             .expect("Failed to load Superblock from buffer");
 
@@ -187,10 +190,6 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const NUM_REGISTERS: usize>
         }
 
         // correctly set the number of arenas, if it has been initialized
-        println!(
-            "num_active_arenas: {} -> {}",
-            superblock.num_active_arenas, num_active_arenas
-        );
         superblock.num_active_arenas = num_active_arenas as u32;
 
         // correctly set the max size
@@ -201,11 +200,8 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const NUM_REGISTERS: usize>
                 current_max_size, superblock.max_size
             );
         } else {
-            println!("max_size: {} -> {}", superblock.max_size, current_max_size);
             superblock.max_size = current_max_size;
         }
-
-        println!("Loaded superblock: {:#?}", superblock);
 
         Self::new(superblock, arenas)
     }
@@ -279,6 +275,10 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const NUM_REGISTERS: usize>
 
     fn size(&self) -> usize {
         self.superblock.size as usize
+    }
+
+    fn capacity(&self) -> usize {
+        self.superblock.max_size as usize
     }
 
     fn initialize(&mut self) {

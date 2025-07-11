@@ -39,13 +39,13 @@ impl Widget {
     }
 }
 
-fn simulate<K: std::fmt::Debug + Clone + Copy + Zeroable + Pod + Ord, T>(expect_sorted: bool)
-where
-    T: Copy + FromSlice + NodeAllocatorMap<K, Widget>,
+fn simulate<K: std::fmt::Debug + Clone + Copy + Zeroable + Pod + Ord, T>(
+    expect_sorted: bool,
+    tree: &mut T,
+) where
+    T: NodeAllocatorMap<K, Widget>,
     Standard: Distribution<K>,
 {
-    let mut buf = vec![0u8; std::mem::size_of::<T>()];
-    let tree = T::new_from_slice(buf.as_mut_slice());
     println!(
         "{} Memory Size: {}, Capacity: {}",
         std::any::type_name::<T>(),
@@ -285,27 +285,35 @@ where
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_simulate_red_black_tree() {
-    type RBTree =
-        RedBlackTree<u64, Widget, SimpleNodeAllocator<RBNode<u64, Widget>, MAX_SIZE, 4>, MAX_SIZE>;
-    simulate::<u64, RBTree>(true);
+    type RBTree<'a> =
+        RedBlackTree<'a, u64, Widget, SimpleNodeAllocator<RBNode<u64, Widget>, MAX_SIZE, 4>>;
+    let mut buf = vec![0u8; RBTree::size_of_buffer()];
+    let mut tree = RBTree::load_from_buffer(buf.as_mut_slice());
+    simulate::<u64, RBTree>(true, &mut tree);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_simulate_hash_table() {
     const NUM_BUCKETS: usize = MAX_SIZE >> 2;
     type HashMap = HashTable<u64, Widget, NUM_BUCKETS, MAX_SIZE>;
-    simulate::<u64, HashMap>(false);
+    let mut buf = vec![0u8; std::mem::size_of::<HashMap>()];
+    let mut tree = HashMap::new_from_slice(buf.as_mut_slice());
+    simulate::<u64, HashMap>(false, &mut tree);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_simulate_avl_tree() {
     type AVLTreeMap = AVLTree<u64, Widget, MAX_SIZE>;
-    simulate::<u64, AVLTreeMap>(true);
+    let mut buf = vec![0u8; std::mem::size_of::<AVLTreeMap>()];
+    let mut tree = AVLTreeMap::new_from_slice(buf.as_mut_slice());
+    simulate::<u64, AVLTreeMap>(true, &mut tree);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_simulate_critbit() {
     const NUM_NODES: usize = MAX_SIZE << 1;
     type CritbitTree = Critbit<Widget, NUM_NODES, MAX_SIZE>;
-    simulate::<u128, CritbitTree>(true);
+    let mut buf = vec![0u8; std::mem::size_of::<CritbitTree>()];
+    let mut tree = CritbitTree::new_from_slice(buf.as_mut_slice());
+    simulate::<u128, CritbitTree>(true, &mut tree);
 }

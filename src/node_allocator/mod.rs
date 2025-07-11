@@ -145,6 +145,8 @@ pub trait NodeAllocator<T: Copy + Clone + Pod + Zeroable + Default, const NUM_RE
 
     fn size(&self) -> usize;
 
+    fn capacity(&self) -> usize;
+
     #[inline(always)]
     fn get_register(&self, i: u32, r_i: u32) -> u32 {
         if i != SENTINEL {

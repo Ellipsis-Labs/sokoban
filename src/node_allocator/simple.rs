@@ -134,6 +134,10 @@ impl<
         self.size as usize
     }
 
+    fn capacity(&self) -> usize {
+        MAX_SIZE
+    }
+
     #[inline(always)]
     fn get(&self, i: u32) -> &Node<T, NUM_REGISTERS> {
         &self.nodes[(i - 1) as usize]
