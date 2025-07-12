@@ -61,13 +61,8 @@ impl<const NUM_BUCKETS: usize> Default for HashTableHeader<NUM_BUCKETS> {
     }
 }
 
-pub type HashTable<
-    'a,
-    K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
-    V: Default + Copy + Clone + Pod + Zeroable,
-    Allocator: NodeAllocator<HashNode<K, V>, 4>,
-    const NUM_BUCKETS: usize,
-> = Container<'a, HashTableHeader<NUM_BUCKETS>, HashNode<K, V>, Allocator, 4>;
+pub type HashTable<'a, K, V, Allocator, const NUM_BUCKETS: usize> =
+    Container<'a, HashTableHeader<NUM_BUCKETS>, HashNode<K, V>, Allocator, 4>;
 pub type StaticHashTable<'a, K, V, const NUM_BUCKETS: usize, const MAX_SIZE: usize> =
     HashTable<'a, K, V, SimpleNodeAllocator<HashNode<K, V>, MAX_SIZE, 4>, NUM_BUCKETS>;
 pub type DynamicHashTable<'a, K, V, const NUM_BUCKETS: usize> =

@@ -77,25 +77,12 @@ unsafe impl Zeroable for RedBlackTreeHeader {}
 unsafe impl Pod for RedBlackTreeHeader {}
 impl ZeroCopy for RedBlackTreeHeader {}
 
-pub type StaticRedBlackTree<
-    'a,
-    K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-    V: Default + Copy + Clone + Pod + Zeroable,
-    const MAX_SIZE: usize,
-> = RedBlackTree<'a, K, V, SimpleNodeAllocator<RBNode<K, V>, MAX_SIZE, 4>>;
-
-pub type DynamicRedBlackTree<
-    'a,
-    K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-    V: Default + Copy + Clone + Pod + Zeroable,
-> = RedBlackTree<'a, K, V, MultiArenaNodeAllocator<'a, RBNode<K, V>, 4>>;
-
-pub type RedBlackTree<
-    'a,
-    K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
-    V: Default + Copy + Clone + Pod + Zeroable,
-    Allocator: NodeAllocator<RBNode<K, V>, 4>,
-> = Container<'a, RedBlackTreeHeader, RBNode<K, V>, Allocator, 4>;
+pub type RedBlackTree<'a, K, V, Allocator> =
+    Container<'a, RedBlackTreeHeader, RBNode<K, V>, Allocator, 4>;
+pub type StaticRedBlackTree<'a, K, V, const MAX_SIZE: usize> =
+    RedBlackTree<'a, K, V, SimpleNodeAllocator<RBNode<K, V>, MAX_SIZE, 4>>;
+pub type DynamicRedBlackTree<'a, K, V> =
+    RedBlackTree<'a, K, V, MultiArenaNodeAllocator<'a, RBNode<K, V>, 4>>;
 
 impl<
         'a,

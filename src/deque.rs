@@ -31,14 +31,10 @@ impl Default for DequeHeader {
     }
 }
 
-pub type StaticDeque<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> =
+pub type Deque<'a, T, Allocator> = Container<'a, DequeHeader, T, Allocator, 2>;
+pub type StaticDeque<'a, T, const MAX_SIZE: usize> =
     Deque<'a, T, SimpleNodeAllocator<T, MAX_SIZE, 2>>;
-
-pub type DynamicDeque<'a, T: Default + Copy + Clone + Pod + Zeroable> =
-    Deque<'a, T, MultiArenaNodeAllocator<'a, T, 2>>;
-
-pub type Deque<'a, T: Default + Copy + Clone + Pod + Zeroable, Allocator: NodeAllocator<T, 2>> =
-    Container<'a, DequeHeader, T, Allocator, 2>;
+pub type DynamicDeque<'a, T> = Deque<'a, T, MultiArenaNodeAllocator<'a, T, 2>>;
 
 impl<'a, T: Default + Copy + Clone + Pod + Zeroable, Allocator: NodeAllocator<T, 2>>
     Deque<'a, T, Allocator>
