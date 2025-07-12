@@ -10,11 +10,6 @@ pub use multi_arena::{
 };
 pub use simple::SimpleNodeAllocator;
 
-/// This is a convenience trait that exposes an interface to read a struct from an arbitrary byte array
-pub trait FromSlice {
-    fn new_from_slice(data: &mut [u8]) -> &mut Self;
-}
-
 /// This trait provides an API for map-like data structures that use the NodeAllocator
 /// struct as the underlying container
 pub trait NodeAllocatorMap<K, V> {
@@ -23,8 +18,6 @@ pub trait NodeAllocatorMap<K, V> {
     fn contains(&self, key: &K) -> bool;
     fn get(&self, key: &K) -> Option<&V>;
     fn get_mut(&mut self, key: &K) -> Option<&mut V>;
-    #[deprecated]
-    fn size(&self) -> usize;
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
         self.len() == 0

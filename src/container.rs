@@ -97,10 +97,33 @@ impl<
         }
     }
 
-    pub fn new_from_buffers(buf: &'a mut [u8], arena_bufs: &'a mut [&'a mut [u8]]) -> Self {
-        let this = Self::load_from_buffers(buf, arena_bufs);
-        this.allocator.initialize();
-        this
+    pub fn new_from_buffers(
+        buf: &'a mut [u8],
+        arena_bufs: &'a mut [&'a mut [u8]],
+        num_arenas: usize,
+        max_size: usize,
+        arena_size: usize,
+    ) -> Self {
+        let (superblock_buf, header_buf) = buf.split_at_mut(std::mem::size_of::<Superblock>());
+
+        // initialize the superblock first
+        {
+            let superblock =
+                Superblock::load_mut_bytes(superblock_buf).expect("Failed to load superblock");
+            superblock.initialize(num_arenas, max_size, arena_size);
+        }
+
+        let allocator = MultiArenaNodeAllocator::from_buffers(superblock_buf, arena_bufs);
+        let header = HeaderType::load_mut_bytes(header_buf).expect("Failed to load header");
+
+        allocator.assert_proper_alignment();
+        allocator.initialize();
+
+        Self {
+            header,
+            allocator,
+            _phantom: PhantomData,
+        }
     }
 
     pub fn size_of_header() -> usize {

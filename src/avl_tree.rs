@@ -154,10 +154,6 @@ impl<
         }
     }
 
-    fn size(&self) -> usize {
-        self.allocator.size() as usize
-    }
-
     fn len(&self) -> usize {
         self.allocator.size() as usize
     }

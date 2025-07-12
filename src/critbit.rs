@@ -2,7 +2,7 @@ use bytemuck::{Pod, Zeroable};
 use std::ops::{Index, IndexMut};
 
 use crate::node_allocator::{
-    FromSlice, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap, SimpleNodeAllocator,
+    NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap, SimpleNodeAllocator,
     TreeField as Field, ZeroCopy, SENTINEL,
 };
 
@@ -76,9 +76,9 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
 }
 
 impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const MAX_SIZE: usize>
-    FromSlice for Critbit<V, NUM_NODES, MAX_SIZE>
+    Critbit<V, NUM_NODES, MAX_SIZE>
 {
-    fn new_from_slice(slice: &mut [u8]) -> &mut Self {
+    pub fn new_from_buffer(slice: &mut [u8]) -> &mut Self {
         assert!(NUM_NODES >= 2 * MAX_SIZE);
         let tree = Self::load_mut_bytes(slice).unwrap();
         tree.initialize();
@@ -149,10 +149,6 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
                 return None;
             }
         }
-    }
-
-    fn size(&self) -> usize {
-        self.leaves.size as usize
     }
 
     fn len(&self) -> usize {

@@ -7,7 +7,6 @@ use rand::rngs::ThreadRng;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use rand::{self, Rng};
-use sokoban::node_allocator::FromSlice;
 use sokoban::node_allocator::NodeAllocatorMap;
 use sokoban::*;
 use std::collections::BTreeMap;
@@ -311,6 +310,6 @@ async fn test_simulate_critbit() {
     const NUM_NODES: usize = MAX_SIZE << 1;
     type CritbitTree = Critbit<Widget, NUM_NODES, MAX_SIZE>;
     let mut buf = vec![0u8; std::mem::size_of::<CritbitTree>()];
-    let mut tree = CritbitTree::new_from_slice(buf.as_mut_slice());
+    let mut tree = CritbitTree::new_from_buffer(buf.as_mut_slice());
     simulate::<u128, CritbitTree>(true, &mut tree);
 }
