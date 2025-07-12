@@ -4,9 +4,12 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-use crate::node_allocator::{
-    FromSlice, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap, SimpleNodeAllocator,
-    ZeroCopy, SENTINEL,
+use crate::{
+    node_allocator::{
+        MultiArenaNodeAllocator, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap,
+        SimpleNodeAllocator, ZeroCopy, SENTINEL,
+    },
+    Container,
 };
 
 // The number of registers (the last register is currently not in use).
@@ -64,56 +67,36 @@ impl<
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct AVLTree<
-    K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
-    V: Default + Copy + Clone + Pod + Zeroable,
-    const MAX_SIZE: usize,
-> {
+pub struct AVLTreeHeader {
     pub root: u64,
-    allocator: SimpleNodeAllocator<AVLNode<K, V>, MAX_SIZE, REGISTERS>,
+    pub _padding: u64,
 }
 
-unsafe impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > Zeroable for AVLTree<K, V, MAX_SIZE>
-{
-}
-unsafe impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > Pod for AVLTree<K, V, MAX_SIZE>
-{
-}
-
-impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > ZeroCopy for AVLTree<K, V, MAX_SIZE>
-{
-}
-
-impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > FromSlice for AVLTree<K, V, MAX_SIZE>
-{
-    fn new_from_slice(slice: &mut [u8]) -> &mut Self {
-        let tree = Self::load_mut_bytes(slice).unwrap();
-        tree.initialize();
-        tree
+unsafe impl Zeroable for AVLTreeHeader {}
+unsafe impl Pod for AVLTreeHeader {}
+impl ZeroCopy for AVLTreeHeader {}
+impl Default for AVLTreeHeader {
+    fn default() -> Self {
+        Self {
+            root: SENTINEL as u64,
+            _padding: 0,
+        }
     }
 }
 
+pub type AVLTree<'a, K, V, Allocator> =
+    Container<'a, AVLTreeHeader, AVLNode<K, V>, Allocator, REGISTERS>;
+pub type StaticAVLTree<'a, K, V, const MAX_SIZE: usize> =
+    AVLTree<'a, K, V, SimpleNodeAllocator<AVLNode<K, V>, MAX_SIZE, REGISTERS>>;
+pub type DynamicAVLTree<'a, K, V> =
+    AVLTree<'a, K, V, MultiArenaNodeAllocator<'a, AVLNode<K, V>, REGISTERS>>;
+
 impl<
+        'a,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > NodeAllocatorMap<K, V> for AVLTree<K, V, MAX_SIZE>
+        Allocator: NodeAllocator<AVLNode<K, V>, REGISTERS>,
+    > NodeAllocatorMap<K, V> for AVLTree<'a, K, V, Allocator>
 {
     fn insert(&mut self, key: K, value: V) -> Option<u32> {
         self._insert(key, value)
@@ -170,15 +153,15 @@ impl<
     }
 
     fn size(&self) -> usize {
-        self.allocator.size as usize
+        self.allocator.size() as usize
     }
 
     fn len(&self) -> usize {
-        self.allocator.size as usize
+        self.allocator.size() as usize
     }
 
     fn capacity(&self) -> usize {
-        MAX_SIZE
+        self.allocator.capacity() as usize
     }
 
     fn iter(&self) -> Box<dyn DoubleEndedIterator<Item = (&K, &V)> + '_> {
@@ -186,15 +169,24 @@ impl<
     }
 
     fn iter_mut(&mut self) -> Box<dyn DoubleEndedIterator<Item = (&K, &mut V)> + '_> {
-        Box::new(self._iter_mut())
+        // SAFETY: The trait requires lifetime '_ but we need to return references with lifetime 'a.
+        // This is safe because 'a outlives the iterator lifetime.
+        unsafe {
+            let iter = self._iter_mut();
+            std::mem::transmute::<
+                Box<dyn DoubleEndedIterator<Item = (&K, &mut V)> + '_>,
+                Box<dyn DoubleEndedIterator<Item = (&K, &mut V)> + '_>,
+            >(Box::new(iter))
+        }
     }
 }
 
 impl<
+        'a,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > OrderedNodeAllocatorMap<K, V> for AVLTree<K, V, MAX_SIZE>
+        Allocator: NodeAllocator<AVLNode<K, V>, REGISTERS>,
+    > OrderedNodeAllocatorMap<K, V> for AVLTree<'a, K, V, Allocator>
 {
     fn get_min_index(&mut self) -> u32 {
         self.find_min_index()
@@ -226,29 +218,12 @@ impl<
 }
 
 impl<
+        'a,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > Default for AVLTree<K, V, MAX_SIZE>
+        Allocator: NodeAllocator<AVLNode<K, V>, REGISTERS>,
+    > AVLTree<'a, K, V, Allocator>
 {
-    fn default() -> Self {
-        AVLTree {
-            root: SENTINEL as u64,
-            allocator: SimpleNodeAllocator::<AVLNode<K, V>, MAX_SIZE, REGISTERS>::default(),
-        }
-    }
-}
-
-impl<
-        K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > AVLTree<K, V, MAX_SIZE>
-{
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn initialize(&mut self) {
         self.allocator.initialize();
     }
@@ -600,8 +575,8 @@ impl<
         }
     }
 
-    fn _iter(&self) -> AVLTreeIterator<'_, K, V, MAX_SIZE> {
-        AVLTreeIterator::<K, V, MAX_SIZE> {
+    fn _iter<'tree>(&'tree self) -> AVLTreeIterator<'tree, K, V, Allocator> {
+        AVLTreeIterator::<K, V, Allocator> {
             tree: self,
             fwd_stack: vec![],
             fwd_ptr: self.root as u32,
@@ -613,9 +588,12 @@ impl<
         }
     }
 
-    fn _iter_mut(&mut self) -> AVLTreeIteratorMut<'_, K, V, MAX_SIZE> {
+    fn _iter_mut<'tree>(&'tree mut self) -> AVLTreeIteratorMut<'tree, 'a, K, V, Allocator>
+    where
+        'a: 'tree,
+    {
         let node = self.root as u32;
-        AVLTreeIteratorMut::<K, V, MAX_SIZE> {
+        AVLTreeIteratorMut::<'tree, 'a, K, V, Allocator> {
             tree: self,
             fwd_stack: vec![],
             fwd_ptr: node,
@@ -632,11 +610,11 @@ impl<
         'a,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > IntoIterator for &'a AVLTree<K, V, MAX_SIZE>
+        Allocator: NodeAllocator<AVLNode<K, V>, REGISTERS>,
+    > IntoIterator for &'a AVLTree<'a, K, V, Allocator>
 {
     type Item = (&'a K, &'a V);
-    type IntoIter = AVLTreeIterator<'a, K, V, MAX_SIZE>;
+    type IntoIter = AVLTreeIterator<'a, K, V, Allocator>;
     fn into_iter(self) -> Self::IntoIter {
         self._iter()
     }
@@ -646,11 +624,11 @@ impl<
         'a,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > IntoIterator for &'a mut AVLTree<K, V, MAX_SIZE>
+        Allocator: NodeAllocator<AVLNode<K, V>, REGISTERS>,
+    > IntoIterator for &'a mut AVLTree<'a, K, V, Allocator>
 {
     type Item = (&'a K, &'a mut V);
-    type IntoIter = AVLTreeIteratorMut<'a, K, V, MAX_SIZE>;
+    type IntoIter = AVLTreeIteratorMut<'a, 'a, K, V, Allocator>;
     fn into_iter(self) -> Self::IntoIter {
         self._iter_mut()
     }
@@ -660,9 +638,9 @@ pub struct AVLTreeIterator<
     'a,
     K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
-    const MAX_SIZE: usize,
+    Allocator: NodeAllocator<AVLNode<K, V>, REGISTERS>,
 > {
-    tree: &'a AVLTree<K, V, MAX_SIZE>,
+    tree: &'a AVLTree<'a, K, V, Allocator>,
     fwd_stack: Vec<u32>,
     fwd_ptr: u32,
     fwd_node: Option<u32>,
@@ -676,8 +654,8 @@ impl<
         'a,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > Iterator for AVLTreeIterator<'a, K, V, MAX_SIZE>
+        Allocator: NodeAllocator<AVLNode<K, V>, REGISTERS>,
+    > Iterator for AVLTreeIterator<'a, K, V, Allocator>
 {
     type Item = (&'a K, &'a V);
 
@@ -706,8 +684,8 @@ impl<
         'a,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > DoubleEndedIterator for AVLTreeIterator<'a, K, V, MAX_SIZE>
+        Allocator: NodeAllocator<AVLNode<K, V>, REGISTERS>,
+    > DoubleEndedIterator for AVLTreeIterator<'a, K, V, Allocator>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         while !self.terminated && (!self.rev_stack.is_empty() || self.rev_ptr != SENTINEL) {
@@ -731,12 +709,15 @@ impl<
 }
 
 pub struct AVLTreeIteratorMut<
+    'tree,
     'a,
     K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
-    const MAX_SIZE: usize,
-> {
-    tree: &'a mut AVLTree<K, V, MAX_SIZE>,
+    Allocator: NodeAllocator<AVLNode<K, V>, REGISTERS>,
+> where
+    'a: 'tree,
+{
+    tree: &'tree mut AVLTree<'a, K, V, Allocator>,
     fwd_stack: Vec<u32>,
     fwd_ptr: u32,
     fwd_node: Option<u32>,
@@ -747,11 +728,14 @@ pub struct AVLTreeIteratorMut<
 }
 
 impl<
+        'tree,
         'a,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > Iterator for AVLTreeIteratorMut<'a, K, V, MAX_SIZE>
+        Allocator: NodeAllocator<AVLNode<K, V>, REGISTERS>,
+    > Iterator for AVLTreeIteratorMut<'tree, 'a, K, V, Allocator>
+where
+    'a: 'tree,
 {
     type Item = (&'a K, &'a mut V);
 
@@ -769,15 +753,14 @@ impl<
                 self.fwd_node = current_node;
                 let ptr = current_node.unwrap();
                 self.fwd_ptr = self.tree.get_field(ptr, Field::Right);
-                // TODO: How does one remove this unsafe?
+                // SAFETY: This is required to extend the lifetime of the mutable reference
+                // to 'tree, but Rust's borrow checker cannot prove this is safe. The iterator
+                // guarantees only one mutable reference to each node at a time, and the
+                // iterator itself is unique, so this is sound as long as the iterator is
+                // not misused (e.g., aliased or cloned).
                 unsafe {
-                    let node = (*self
-                        .tree
-                        .allocator
-                        .nodes
-                        .as_mut_ptr()
-                        .add((ptr - 1) as usize))
-                    .get_value_mut();
+                    let node: &mut AVLNode<_, _> =
+                        &mut *(&mut *self.tree.allocator.get_mut(ptr).get_value_mut() as *mut _);
                     return Some((&node.key, &mut node.value));
                 }
             }
@@ -787,11 +770,14 @@ impl<
 }
 
 impl<
+        'tree,
         'a,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > DoubleEndedIterator for AVLTreeIteratorMut<'a, K, V, MAX_SIZE>
+        Allocator: NodeAllocator<AVLNode<K, V>, REGISTERS>,
+    > DoubleEndedIterator for AVLTreeIteratorMut<'tree, 'a, K, V, Allocator>
+where
+    'a: 'tree,
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         while !self.terminated && (!self.rev_stack.is_empty() || self.rev_ptr != SENTINEL) {
@@ -807,15 +793,14 @@ impl<
                 self.rev_node = current_node;
                 let ptr = current_node.unwrap();
                 self.rev_ptr = self.tree.get_field(ptr, Field::Left);
-                // TODO: How does one remove this unsafe?
+                // SAFETY: This is required to extend the lifetime of the mutable reference
+                // to 'tree, but Rust's borrow checker cannot prove this is safe. The iterator
+                // guarantees only one mutable reference to each node at a time, and the
+                // iterator itself is unique, so this is sound as long as the iterator is
+                // not misused (e.g., aliased or cloned).
                 unsafe {
-                    let node = (*self
-                        .tree
-                        .allocator
-                        .nodes
-                        .as_mut_ptr()
-                        .add((ptr - 1) as usize))
-                    .get_value_mut();
+                    let node: &mut AVLNode<_, _> =
+                        &mut *(&mut *self.tree.allocator.get_mut(ptr).get_value_mut() as *mut _);
                     return Some((&node.key, &mut node.value));
                 }
             }
@@ -825,10 +810,11 @@ impl<
 }
 
 impl<
+        'a,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > Index<&K> for AVLTree<K, V, MAX_SIZE>
+        Allocator: NodeAllocator<AVLNode<K, V>, REGISTERS>,
+    > Index<&K> for AVLTree<'a, K, V, Allocator>
 {
     type Output = V;
 
@@ -838,10 +824,11 @@ impl<
 }
 
 impl<
+        'a,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_SIZE: usize,
-    > IndexMut<&K> for AVLTree<K, V, MAX_SIZE>
+        Allocator: NodeAllocator<AVLNode<K, V>, REGISTERS>,
+    > IndexMut<&K> for AVLTree<'a, K, V, Allocator>
 {
     fn index_mut(&mut self, index: &K) -> &mut Self::Output {
         self.get_mut(index).unwrap()

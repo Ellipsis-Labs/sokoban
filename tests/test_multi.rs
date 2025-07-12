@@ -297,8 +297,7 @@ fn test_node_number_calculation() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_simulate_red_black_tree() {
-    type RBTree<'a> =
-        RedBlackTree<'a, u64, Widget, MultiArenaNodeAllocator<'a, RBNode<u64, Widget>, 4>>;
+    type RBTree<'a> = DynamicRedBlackTree<'a, u64, Widget>;
 
     // 4 arenas (4000, 4000, 4000, 4000)
     let mut header_buf = vec![0u8; RBTree::size_of_header()];
@@ -324,8 +323,7 @@ async fn test_simulate_red_black_tree() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_simulate_red_black_tree_with_partial_arenas() {
-    type RBTree<'a> =
-        RedBlackTree<'a, u64, Widget, MultiArenaNodeAllocator<'a, RBNode<u64, Widget>, 4>>;
+    type RBTree<'a> = DynamicRedBlackTree<'a, u64, Widget>;
 
     // 4 arenas (6000, 6000, 6000, 2000)
     let mut header_buf = vec![0u8; RBTree::size_of_header()];
@@ -352,8 +350,7 @@ async fn test_simulate_red_black_tree_with_partial_arenas() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_simulate_red_black_tree_with_resize_up() {
-    type RBTree<'a> =
-        RedBlackTree<'a, u64, Widget, MultiArenaNodeAllocator<'a, RBNode<u64, Widget>, 4>>;
+    type RBTree<'a> = DynamicRedBlackTree<'a, u64, Widget>;
 
     // 4 arenas (6000, 6000, 6000, 2000)
     let mut header_buf = vec![0u8; RBTree::size_of_header()];

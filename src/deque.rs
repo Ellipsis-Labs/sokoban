@@ -1,6 +1,8 @@
 use crate::{
-    node_allocator::{NodeAllocator, SimpleNodeAllocator, ZeroCopy, SENTINEL},
-    FromSlice,
+    container::Container,
+    node_allocator::{
+        MultiArenaNodeAllocator, NodeAllocator, SimpleNodeAllocator, ZeroCopy, SENTINEL,
+    },
 };
 use bytemuck::{Pod, Zeroable};
 
@@ -10,55 +12,37 @@ pub const NEXT: u32 = 1;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct Deque<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> {
+pub struct DequeHeader {
     pub sequence_number: u64,
     pub head: u32,
     pub tail: u32,
-    allocator: SimpleNodeAllocator<T, MAX_SIZE, 2>,
 }
 
-unsafe impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Zeroable
-    for Deque<T, MAX_SIZE>
-{
-}
-unsafe impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Pod
-    for Deque<T, MAX_SIZE>
-{
-}
-
-impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> ZeroCopy
-    for Deque<T, MAX_SIZE>
-{
-}
-
-impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> FromSlice
-    for Deque<T, MAX_SIZE>
-{
-    fn new_from_slice(slice: &mut [u8]) -> &mut Self {
-        let deque = Self::load_mut_bytes(slice).unwrap();
-        deque.initialize();
-        deque
-    }
-}
-
-impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Default
-    for Deque<T, MAX_SIZE>
-{
+unsafe impl Zeroable for DequeHeader {}
+unsafe impl Pod for DequeHeader {}
+impl ZeroCopy for DequeHeader {}
+impl Default for DequeHeader {
     fn default() -> Self {
-        Deque {
+        Self {
             sequence_number: 0,
             head: SENTINEL,
             tail: SENTINEL,
-            allocator: SimpleNodeAllocator::<T, MAX_SIZE, 2>::default(),
         }
     }
 }
 
-impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T, MAX_SIZE> {
-    pub fn new() -> Self {
-        Self::default()
-    }
+pub type StaticDeque<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> =
+    Deque<'a, T, SimpleNodeAllocator<T, MAX_SIZE, 2>>;
 
+pub type DynamicDeque<'a, T: Default + Copy + Clone + Pod + Zeroable> =
+    Deque<'a, T, MultiArenaNodeAllocator<'a, T, 2>>;
+
+pub type Deque<'a, T: Default + Copy + Clone + Pod + Zeroable, Allocator: NodeAllocator<T, 2>> =
+    Container<'a, DequeHeader, T, Allocator, 2>;
+
+impl<'a, T: Default + Copy + Clone + Pod + Zeroable, Allocator: NodeAllocator<T, 2>>
+    Deque<'a, T, Allocator>
+{
     pub fn initialize(&mut self) {
         self.allocator.initialize();
     }
@@ -156,15 +140,15 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
     }
 
     pub fn len(&self) -> usize {
-        self.allocator.size as usize
+        self.allocator.size() as usize
     }
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    pub fn iter(&self) -> DequeIterator<'_, T, MAX_SIZE> {
-        DequeIterator::<T, MAX_SIZE> {
+    pub fn iter(&self) -> DequeIterator<'_, T, Allocator> {
+        DequeIterator::<T, Allocator> {
             deque: self,
             fwd_ptr: self.head,
             rev_ptr: self.tail,
@@ -172,10 +156,13 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         }
     }
 
-    pub fn iter_mut(&mut self) -> DequeIteratorMut<'_, T, MAX_SIZE> {
+    pub fn iter_mut<'deque>(&'deque mut self) -> DequeIteratorMut<'deque, 'a, T, Allocator>
+    where
+        'a: 'deque,
+    {
         let head = self.head;
         let tail = self.tail;
-        DequeIteratorMut::<T, MAX_SIZE> {
+        DequeIteratorMut::<'deque, 'a, T, Allocator> {
             deque: self,
             fwd_ptr: head,
             rev_ptr: tail,
@@ -184,15 +171,19 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
     }
 }
 
-pub struct DequeIterator<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> {
-    deque: &'a Deque<T, MAX_SIZE>,
+pub struct DequeIterator<
+    'a,
+    T: Default + Copy + Clone + Pod + Zeroable,
+    Allocator: NodeAllocator<T, 2>,
+> {
+    deque: &'a Deque<'a, T, Allocator>,
     fwd_ptr: u32,
     rev_ptr: u32,
     terminated: bool,
 }
 
-impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iterator
-    for DequeIterator<'a, T, MAX_SIZE>
+impl<'a, T: Default + Copy + Clone + Pod + Zeroable, Allocator: NodeAllocator<T, 2>> Iterator
+    for DequeIterator<'a, T, Allocator>
 {
     type Item = (usize, &'a T);
 
@@ -214,8 +205,8 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iter
     }
 }
 
-impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> DoubleEndedIterator
-    for DequeIterator<'a, T, MAX_SIZE>
+impl<'a, T: Default + Copy + Clone + Pod + Zeroable, Allocator: NodeAllocator<T, 2>>
+    DoubleEndedIterator for DequeIterator<'a, T, Allocator>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.terminated {
@@ -235,15 +226,24 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Doub
     }
 }
 
-pub struct DequeIteratorMut<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> {
-    deque: &'a mut Deque<T, MAX_SIZE>,
+pub struct DequeIteratorMut<
+    'deque,
+    'a,
+    T: Default + Copy + Clone + Pod + Zeroable,
+    Allocator: NodeAllocator<T, 2>,
+> where
+    'a: 'deque,
+{
+    deque: &'deque mut Deque<'a, T, Allocator>,
     fwd_ptr: u32,
     rev_ptr: u32,
     terminated: bool,
 }
 
-impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iterator
-    for DequeIteratorMut<'a, T, MAX_SIZE>
+impl<'deque, 'a, T: Default + Copy + Clone + Pod + Zeroable, Allocator: NodeAllocator<T, 2>>
+    Iterator for DequeIteratorMut<'deque, 'a, T, Allocator>
+where
+    'a: 'deque,
 {
     type Item = (usize, &'a mut T);
 
@@ -259,22 +259,26 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iter
                     self.terminated = true;
                 }
                 self.fwd_ptr = self.deque.get_next(ptr);
-                Some((ptr as usize, unsafe {
-                    (*self
-                        .deque
-                        .allocator
-                        .nodes
-                        .as_mut_ptr()
-                        .add((ptr - 1) as usize))
-                    .get_value_mut()
-                }))
+
+                // SAFETY: This is required to extend the lifetime of the mutable reference
+                // to 'a, but Rust's borrow checker cannot prove this is safe. The iterator
+                // guarantees only one mutable reference to each node at a time, and the
+                // iterator itself is unique, so this is sound as long as the iterator is
+                // not misused (e.g., aliased or cloned).
+                unsafe {
+                    let item: &mut T =
+                        &mut *(&mut *self.deque.allocator.get_mut(ptr).get_value_mut() as *mut _);
+                    Some((ptr as usize, item))
+                }
             }
         }
     }
 }
 
-impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> DoubleEndedIterator
-    for DequeIteratorMut<'a, T, MAX_SIZE>
+impl<'deque, 'a, T: Default + Copy + Clone + Pod + Zeroable, Allocator: NodeAllocator<T, 2>>
+    DoubleEndedIterator for DequeIteratorMut<'deque, 'a, T, Allocator>
+where
+    'a: 'deque,
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.terminated {
@@ -288,15 +292,17 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Doub
                     self.terminated = true;
                 }
                 self.rev_ptr = self.deque.get_prev(ptr);
-                Some((ptr as usize, unsafe {
-                    (*self
-                        .deque
-                        .allocator
-                        .nodes
-                        .as_mut_ptr()
-                        .add((ptr - 1) as usize))
-                    .get_value_mut()
-                }))
+
+                // SAFETY: This is required to extend the lifetime of the mutable reference
+                // to 'a, but Rust's borrow checker cannot prove this is safe. The iterator
+                // guarantees only one mutable reference to each node at a time, and the
+                // iterator itself is unique, so this is sound as long as the iterator is
+                // not misused (e.g., aliased or cloned).
+                unsafe {
+                    let item: &mut T =
+                        &mut *(&mut *self.deque.allocator.get_mut(ptr).get_value_mut() as *mut _);
+                    Some((ptr as usize, item))
+                }
             }
         }
     }
@@ -309,10 +315,11 @@ fn test_deque() {
     use rand::Rng;
     use std::collections::VecDeque;
     let mut rng = thread_rng();
-    type Q = Deque<u64, 1024>;
-    let mut buf = vec![0u8; std::mem::size_of::<Q>()];
+    type Q<'a> = StaticDeque<'a, u64, 1024>;
+    let mut buf = vec![0u8; Q::size_of_buffer()];
     let mut v = VecDeque::new();
-    let q = Q::new_from_slice(buf.as_mut_slice());
+    let mut q = Q::load_from_buffer(buf.as_mut_slice());
+    q.initialize();
     (0..128).for_each(|_| {
         let t = rng.gen::<u64>();
         q.push_back(t);

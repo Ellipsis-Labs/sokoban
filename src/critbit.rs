@@ -509,7 +509,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         node
     }
 
-    fn _iter(&self) -> CritbitIterator<'_, V, NUM_NODES, MAX_SIZE> {
+    fn _iter<'tree>(&'tree self) -> CritbitIterator<'tree, V, NUM_NODES, MAX_SIZE> {
         if self.root == SENTINEL {
             CritbitIterator::<V, NUM_NODES, MAX_SIZE> {
                 tree: self,
@@ -531,7 +531,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         }
     }
 
-    fn _iter_mut(&mut self) -> CritbitIteratorMut<'_, V, NUM_NODES, MAX_SIZE> {
+    fn _iter_mut<'tree>(&'tree mut self) -> CritbitIteratorMut<'tree, V, NUM_NODES, MAX_SIZE> {
         let node = self.root;
         if node == SENTINEL {
             CritbitIteratorMut::<V, NUM_NODES, MAX_SIZE> {
@@ -670,12 +670,12 @@ impl<
 }
 
 pub struct CritbitIteratorMut<
-    'a,
+    'tree,
     V: Default + Copy + Clone + Pod + Zeroable,
     const MAX_NODES: usize,
     const MAX_SIZE: usize,
 > {
-    tree: &'a mut Critbit<V, MAX_NODES, MAX_SIZE>,
+    tree: &'tree mut Critbit<V, MAX_NODES, MAX_SIZE>,
     fwd_stack: Vec<u32>,
     fwd_node: Option<u32>,
     rev_stack: Vec<u32>,
@@ -684,13 +684,13 @@ pub struct CritbitIteratorMut<
 }
 
 impl<
-        'a,
+        'tree,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_NODES: usize,
         const MAX_SIZE: usize,
-    > Iterator for CritbitIteratorMut<'a, V, MAX_NODES, MAX_SIZE>
+    > Iterator for CritbitIteratorMut<'tree, V, MAX_NODES, MAX_SIZE>
 {
-    type Item = (&'a u128, &'a mut V);
+    type Item = (&'tree u128, &'tree mut V);
 
     fn next(&mut self) -> Option<Self::Item> {
         while !self.terminated && !self.fwd_stack.is_empty() {
@@ -704,18 +704,15 @@ impl<
                             return None;
                         }
                         self.fwd_node = Some(i);
+                        // SAFETY: This is required to extend the lifetime of the mutable reference
+                        // to 'tree, but Rust's borrow checker cannot prove this is safe. The iterator
+                        // guarantees only one mutable reference to each node at a time, and the
+                        // iterator itself is unique, so this is sound as long as the iterator is
+                        // not misused (e.g., aliased or cloned).
                         unsafe {
-                            let key = &(*self
-                                .tree
-                                .node_allocator
-                                .nodes
-                                .as_ptr()
-                                .add((n - 1) as usize))
-                            .get_value()
-                            .key;
-                            let leaf = (*self.tree.leaves.nodes.as_mut_ptr().add((i - 1) as usize))
-                                .get_value_mut();
-                            return Some((key, leaf));
+                            let key_ptr = self.tree.get_key(n) as *const u128;
+                            let leaf_ptr = self.tree.leaves.get_mut(i).get_value_mut() as *mut V;
+                            return Some((&*key_ptr, &mut *leaf_ptr));
                         }
                     } else {
                         self.fwd_stack.push(self.tree.get_right(n));
@@ -730,11 +727,11 @@ impl<
 }
 
 impl<
-        'a,
+        'tree,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_NODES: usize,
         const MAX_SIZE: usize,
-    > DoubleEndedIterator for CritbitIteratorMut<'a, V, MAX_NODES, MAX_SIZE>
+    > DoubleEndedIterator for CritbitIteratorMut<'tree, V, MAX_NODES, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         while !self.terminated && !self.rev_stack.is_empty() {
@@ -748,18 +745,15 @@ impl<
                             return None;
                         }
                         self.rev_node = Some(i);
+                        // SAFETY: This is required to extend the lifetime of the mutable reference
+                        // to 'tree, but Rust's borrow checker cannot prove this is safe. The iterator
+                        // guarantees only one mutable reference to each node at a time, and the
+                        // iterator itself is unique, so this is sound as long as the iterator is
+                        // not misused (e.g., aliased or cloned).
                         unsafe {
-                            let key = &(*self
-                                .tree
-                                .node_allocator
-                                .nodes
-                                .as_ptr()
-                                .add((n - 1) as usize))
-                            .get_value()
-                            .key;
-                            let leaf = (*self.tree.leaves.nodes.as_mut_ptr().add((i - 1) as usize))
-                                .get_value_mut();
-                            return Some((key, leaf));
+                            let key_ptr = self.tree.get_key(n) as *const u128;
+                            let leaf_ptr = self.tree.leaves.get_mut(i).get_value_mut() as *mut V;
+                            return Some((&*key_ptr, &mut *leaf_ptr));
                         }
                     } else {
                         self.rev_stack.push(self.tree.get_left(n));

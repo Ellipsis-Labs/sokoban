@@ -9,8 +9,6 @@ use rand::thread_rng;
 use rand::{self, Rng};
 use sokoban::node_allocator::FromSlice;
 use sokoban::node_allocator::NodeAllocatorMap;
-use sokoban::node_allocator::SimpleNodeAllocator;
-use sokoban::red_black_tree::RBNode;
 use sokoban::*;
 use std::collections::BTreeMap;
 
@@ -285,27 +283,29 @@ fn simulate<K: std::fmt::Debug + Clone + Copy + Zeroable + Pod + Ord, T>(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_simulate_red_black_tree() {
-    type RBTree<'a> =
-        RedBlackTree<'a, u64, Widget, SimpleNodeAllocator<RBNode<u64, Widget>, MAX_SIZE, 4>>;
+    type RBTree<'a> = StaticRedBlackTree<'a, u64, Widget, MAX_SIZE>;
     let mut buf = vec![0u8; RBTree::size_of_buffer()];
     let mut tree = RBTree::load_from_buffer(buf.as_mut_slice());
+    tree.initialize();
     simulate::<u64, RBTree>(true, &mut tree);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_simulate_hash_table() {
     const NUM_BUCKETS: usize = MAX_SIZE >> 2;
-    type HashMap = HashTable<u64, Widget, NUM_BUCKETS, MAX_SIZE>;
-    let mut buf = vec![0u8; std::mem::size_of::<HashMap>()];
-    let mut tree = HashMap::new_from_slice(buf.as_mut_slice());
+    type HashMap<'a> = StaticHashTable<'a, u64, Widget, NUM_BUCKETS, MAX_SIZE>;
+    let mut buf = vec![0u8; HashMap::size_of_buffer()];
+    let mut tree = HashMap::load_from_buffer(buf.as_mut_slice());
+    tree.initialize();
     simulate::<u64, HashMap>(false, &mut tree);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_simulate_avl_tree() {
-    type AVLTreeMap = AVLTree<u64, Widget, MAX_SIZE>;
-    let mut buf = vec![0u8; std::mem::size_of::<AVLTreeMap>()];
-    let mut tree = AVLTreeMap::new_from_slice(buf.as_mut_slice());
+    type AVLTreeMap<'a> = StaticAVLTree<'a, u64, Widget, MAX_SIZE>;
+    let mut buf = vec![0u8; AVLTreeMap::size_of_buffer()];
+    let mut tree = AVLTreeMap::load_from_buffer(buf.as_mut_slice());
+    tree.initialize();
     simulate::<u64, AVLTreeMap>(true, &mut tree);
 }
 

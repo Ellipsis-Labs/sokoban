@@ -6,8 +6,8 @@ extern crate test;
 mod bench_tests {
     use rand::seq::SliceRandom;
     use rand::{self, Rng};
-    use sokoban::node_allocator::{size_of_nodes, SimpleNodeAllocator};
-    use sokoban::node_allocator::{FromSlice, MultiArenaNodeAllocator};
+    use sokoban::node_allocator::size_of_nodes;
+    use sokoban::node_allocator::FromSlice;
     use sokoban::node_allocator::{NodeAllocatorMap, Superblock};
     use sokoban::red_black_tree::RBNode;
     use sokoban::*;
@@ -19,23 +19,20 @@ mod bench_tests {
     const NUM_BUCKETS: usize = MAX_SIZE >> 2;
     const NUM_NODES: usize = (MAX_SIZE << 1) + 1;
 
-    type RBTree<'a> =
-        RedBlackTree<'a, u128, u128, SimpleNodeAllocator<RBNode<u128, u128>, MAX_SIZE, 4>>;
-    type SHashMap = HashTable<u128, u128, NUM_BUCKETS, MAX_SIZE>;
-    type AVLTreeMap = AVLTree<u128, u128, MAX_SIZE>;
+    type RBTree<'a> = StaticRedBlackTree<'a, u128, u128, MAX_SIZE>;
+    type SHashMap<'a> = StaticHashTable<'a, u128, u128, NUM_BUCKETS, MAX_SIZE>;
+    type AVLTreeMap<'a> = StaticAVLTree<'a, u128, u128, MAX_SIZE>;
     type CritbitTree = Critbit<u128, NUM_NODES, MAX_SIZE>;
 
     const NUM_BUCKETS_1K: usize = 1000;
     const NUM_NODES_1K: usize = (1001 << 1) + 1;
 
-    type RBTree1K<'a> =
-        RedBlackTree<'a, u128, u128, SimpleNodeAllocator<RBNode<u128, u128>, 1001, 4>>;
-    type SHashMap1K = HashTable<u128, u128, NUM_BUCKETS_1K, 2001>;
-    type AVLTreeMap1K = AVLTree<u128, u128, 1001>;
+    type RBTree1K<'a> = StaticRedBlackTree<'a, u128, u128, 1001>;
+    type SHashMap1K<'a> = StaticHashTable<'a, u128, u128, NUM_BUCKETS_1K, 2001>;
+    type AVLTreeMap1K<'a> = StaticAVLTree<'a, u128, u128, 1001>;
     type CritbitTree1K = Critbit<u128, NUM_NODES_1K, 1001>;
 
-    type RBTreeMultiArena<'a> =
-        RedBlackTree<'a, u128, u128, MultiArenaNodeAllocator<'a, RBNode<u128, u128>, 4>>;
+    type RBTreeMultiArena<'a> = DynamicRedBlackTree<'a, u128, u128>;
 
     fn prepare_memories_for_multi_arena(
         num_arenas: usize,
@@ -108,8 +105,9 @@ mod bench_tests {
     #[bench]
     fn bench_sokoban_hash_map_insert_1000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
-        let mut buf = vec![0u8; std::mem::size_of::<SHashMap1K>()];
-        let m = SHashMap1K::new_from_slice(buf.as_mut_slice());
+        let mut buf = vec![0u8; SHashMap1K::size_of_buffer()];
+        let mut m = SHashMap1K::load_from_buffer(buf.as_mut_slice());
+        m.initialize();
         b.iter(|| {
             for v in 0..1000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -132,8 +130,9 @@ mod bench_tests {
     #[bench]
     fn bench_sokoban_avl_tree_insert_1000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
-        let mut buf = vec![0u8; std::mem::size_of::<AVLTreeMap1K>()];
-        let m = AVLTreeMap1K::new_from_slice(buf.as_mut_slice());
+        let mut buf = vec![0u8; AVLTreeMap1K::size_of_buffer()];
+        let mut m = AVLTreeMap1K::load_from_buffer(buf.as_mut_slice());
+        m.initialize();
         b.iter(|| {
             for v in 0..1000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -157,7 +156,9 @@ mod bench_tests {
     #[bench]
     fn bench_sokoban_hash_map_insert_1000_u128_stack(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
-        let mut m = SHashMap1K::new();
+        let mut buf = vec![0u8; SHashMap1K::size_of_buffer()];
+        let mut m = SHashMap1K::load_from_buffer(buf.as_mut_slice());
+        m.initialize();
         b.iter(|| {
             for v in 0..1000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -179,7 +180,9 @@ mod bench_tests {
     #[bench]
     fn bench_sokoban_avl_tree_insert_1000_u128_stack(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
-        let mut m = AVLTreeMap1K::new();
+        let mut buf = vec![0u8; AVLTreeMap1K::size_of_buffer()];
+        let mut m = AVLTreeMap1K::load_from_buffer(buf.as_mut_slice());
+        m.initialize();
         b.iter(|| {
             for v in 0..1000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -244,8 +247,9 @@ mod bench_tests {
     #[bench]
     fn bench_sokoban_hash_map_insert_20000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
-        let mut buf = vec![0u8; std::mem::size_of::<SHashMap>()];
-        let m = SHashMap::new_from_slice(buf.as_mut_slice());
+        let mut buf = vec![0u8; SHashMap::size_of_buffer()];
+        let mut m = SHashMap::load_from_buffer(buf.as_mut_slice());
+        m.initialize();
         b.iter(|| {
             for v in 0..20000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -268,8 +272,9 @@ mod bench_tests {
     #[bench]
     fn bench_sokoban_avl_tree_insert_20000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
-        let mut buf = vec![0u8; std::mem::size_of::<AVLTreeMap>()];
-        let m = AVLTreeMap::new_from_slice(buf.as_mut_slice());
+        let mut buf = vec![0u8; AVLTreeMap::size_of_buffer()];
+        let mut m = AVLTreeMap::load_from_buffer(buf.as_mut_slice());
+        m.initialize();
         b.iter(|| {
             for v in 0..20000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -354,8 +359,9 @@ mod bench_tests {
     #[bench]
     fn bench_sokoban_hash_map_remove_1000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
-        let mut buf = vec![0u8; std::mem::size_of::<SHashMap>()];
-        let m = SHashMap::new_from_slice(buf.as_mut_slice());
+        let mut buf = vec![0u8; SHashMap::size_of_buffer()];
+        let mut m = SHashMap::load_from_buffer(buf.as_mut_slice());
+        m.initialize();
         let mut slice: Vec<u128> = (0..1000).collect();
         slice.shuffle(&mut rng);
         for v in 0..1000 {
@@ -388,8 +394,9 @@ mod bench_tests {
     #[bench]
     fn bench_sokoban_avl_tree_remove_1000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
-        let mut buf = vec![0u8; std::mem::size_of::<AVLTreeMap>()];
-        let m = AVLTreeMap::new_from_slice(buf.as_mut_slice());
+        let mut buf = vec![0u8; AVLTreeMap::size_of_buffer()];
+        let mut m = AVLTreeMap::load_from_buffer(buf.as_mut_slice());
+        m.initialize();
         let mut slice: Vec<u128> = (0..1000).collect();
         slice.shuffle(&mut rng);
         for v in 0..1000 {
@@ -471,8 +478,9 @@ mod bench_tests {
     #[bench]
     fn bench_sokoban_hash_map_lookup_20000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
-        let mut buf = vec![0u8; std::mem::size_of::<SHashMap>()];
-        let m = SHashMap::new_from_slice(buf.as_mut_slice());
+        let mut buf = vec![0u8; SHashMap::size_of_buffer()];
+        let mut m = SHashMap::load_from_buffer(buf.as_mut_slice());
+        m.initialize();
         for v in 0..20000 {
             m.insert(v as u128, rng.gen::<u128>());
         }
@@ -501,8 +509,9 @@ mod bench_tests {
     #[bench]
     fn bench_sokoban_avl_tree_lookup_20000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
-        let mut buf = vec![0u8; std::mem::size_of::<AVLTreeMap>()];
-        let m = AVLTreeMap::new_from_slice(buf.as_mut_slice());
+        let mut buf = vec![0u8; AVLTreeMap::size_of_buffer()];
+        let mut m = AVLTreeMap::load_from_buffer(buf.as_mut_slice());
+        m.initialize();
         for v in 0..20000 {
             m.insert(v as u128, rng.gen::<u128>());
         }

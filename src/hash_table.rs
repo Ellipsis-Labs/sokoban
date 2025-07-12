@@ -1,6 +1,8 @@
 use crate::node_allocator::{
-    FromSlice, NodeAllocator, NodeAllocatorMap, NodeField, SimpleNodeAllocator, ZeroCopy, SENTINEL,
+    MultiArenaNodeAllocator, NodeAllocator, NodeAllocatorMap, NodeField, SimpleNodeAllocator,
+    ZeroCopy, SENTINEL,
 };
+use crate::Container;
 use bytemuck::{Pod, Zeroable};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
@@ -44,64 +46,40 @@ impl<
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct HashTable<
-    K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
-    V: Default + Copy + Clone + Pod + Zeroable,
-    const NUM_BUCKETS: usize,
-    const MAX_SIZE: usize,
-> {
+pub struct HashTableHeader<const NUM_BUCKETS: usize> {
     pub buckets: [u32; NUM_BUCKETS],
-    pub allocator: SimpleNodeAllocator<HashNode<K, V>, MAX_SIZE, 4>,
 }
 
-unsafe impl<
-        K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const NUM_BUCKETS: usize,
-        const MAX_SIZE: usize,
-    > Zeroable for HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
-{
-}
-unsafe impl<
-        K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const NUM_BUCKETS: usize,
-        const MAX_SIZE: usize,
-    > Pod for HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
-{
-}
-
-impl<
-        K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const NUM_BUCKETS: usize,
-        const MAX_SIZE: usize,
-    > ZeroCopy for HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
-{
-}
-
-impl<
-        K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const NUM_BUCKETS: usize,
-        const MAX_SIZE: usize,
-    > Default for HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
-{
+unsafe impl<const NUM_BUCKETS: usize> Zeroable for HashTableHeader<NUM_BUCKETS> {}
+unsafe impl<const NUM_BUCKETS: usize> Pod for HashTableHeader<NUM_BUCKETS> {}
+impl<const NUM_BUCKETS: usize> ZeroCopy for HashTableHeader<NUM_BUCKETS> {}
+impl<const NUM_BUCKETS: usize> Default for HashTableHeader<NUM_BUCKETS> {
     fn default() -> Self {
-        Self::assert_proper_alignment();
-        HashTable {
+        Self {
             buckets: [SENTINEL; NUM_BUCKETS],
-            allocator: SimpleNodeAllocator::<HashNode<K, V>, MAX_SIZE, 4>::default(),
         }
     }
 }
 
+pub type HashTable<
+    'a,
+    K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    Allocator: NodeAllocator<HashNode<K, V>, 4>,
+    const NUM_BUCKETS: usize,
+> = Container<'a, HashTableHeader<NUM_BUCKETS>, HashNode<K, V>, Allocator, 4>;
+pub type StaticHashTable<'a, K, V, const NUM_BUCKETS: usize, const MAX_SIZE: usize> =
+    HashTable<'a, K, V, SimpleNodeAllocator<HashNode<K, V>, MAX_SIZE, 4>, NUM_BUCKETS>;
+pub type DynamicHashTable<'a, K, V, const NUM_BUCKETS: usize> =
+    HashTable<'a, K, V, MultiArenaNodeAllocator<'a, HashNode<K, V>, 4>, NUM_BUCKETS>;
+
 impl<
+        'a,
         K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<HashNode<K, V>, 4>,
         const NUM_BUCKETS: usize,
-        const MAX_SIZE: usize,
-    > NodeAllocatorMap<K, V> for HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
+    > NodeAllocatorMap<K, V> for HashTable<'a, K, V, Allocator, NUM_BUCKETS>
 {
     fn insert(&mut self, key: K, value: V) -> Option<u32> {
         self._insert(key, value)
@@ -169,15 +147,15 @@ impl<
     }
 
     fn size(&self) -> usize {
-        self.allocator.size as usize
+        self.allocator.size()
     }
 
     fn len(&self) -> usize {
-        self.allocator.size as usize
+        self.allocator.size()
     }
 
     fn capacity(&self) -> usize {
-        MAX_SIZE
+        self.allocator.capacity()
     }
 
     fn iter(&self) -> Box<dyn DoubleEndedIterator<Item = (&K, &V)> + '_> {
@@ -185,31 +163,25 @@ impl<
     }
 
     fn iter_mut(&mut self) -> Box<dyn DoubleEndedIterator<Item = (&K, &mut V)> + '_> {
-        Box::new(self._iter_mut())
+        // SAFETY: The trait requires lifetime '_ but we need to return references with lifetime 'a.
+        // This is safe because 'a outlives the iterator lifetime.
+        unsafe {
+            let iter = self._iter_mut();
+            std::mem::transmute::<
+                Box<dyn DoubleEndedIterator<Item = (&K, &mut V)> + '_>,
+                Box<dyn DoubleEndedIterator<Item = (&K, &mut V)> + '_>,
+            >(Box::new(iter))
+        }
     }
 }
 
 impl<
+        'a,
         K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<HashNode<K, V>, 4>,
         const NUM_BUCKETS: usize,
-        const MAX_SIZE: usize,
-    > FromSlice for HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
-{
-    fn new_from_slice(slice: &mut [u8]) -> &mut Self {
-        Self::assert_proper_alignment();
-        let tab = Self::load_mut_bytes(slice).unwrap();
-        tab.initialize();
-        tab
-    }
-}
-
-impl<
-        K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const NUM_BUCKETS: usize,
-        const MAX_SIZE: usize,
-    > HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
+    > HashTable<'a, K, V, Allocator, NUM_BUCKETS>
 {
     fn assert_proper_alignment() {
         assert!(NUM_BUCKETS % 2 == 0);
@@ -217,10 +189,6 @@ impl<
 
     pub fn initialize(&mut self) {
         self.allocator.initialize();
-    }
-
-    pub fn new() -> Self {
-        Self::default()
     }
 
     pub fn get_next(&self, index: u32) -> u32 {
@@ -333,17 +301,25 @@ impl<
         SENTINEL
     }
 
-    fn _iter(&self) -> HashTableIterator<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
-        HashTableIterator::<K, V, NUM_BUCKETS, MAX_SIZE> {
+    fn _iter<'tree>(&'tree self) -> HashTableIterator<'tree, K, V, Allocator, NUM_BUCKETS>
+    where
+        'a: 'tree,
+    {
+        HashTableIterator::<K, V, Allocator, NUM_BUCKETS> {
             ht: self,
             bucket: 0,
             node: self.buckets[0],
         }
     }
 
-    fn _iter_mut(&mut self) -> HashTableIteratorMut<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
+    fn _iter_mut<'tree>(
+        &'tree mut self,
+    ) -> HashTableIteratorMut<'tree, 'a, K, V, Allocator, NUM_BUCKETS>
+    where
+        'a: 'tree,
+    {
         let node = self.buckets[0];
-        HashTableIteratorMut::<K, V, NUM_BUCKETS, MAX_SIZE> {
+        HashTableIteratorMut::<'tree, 'a, K, V, Allocator, NUM_BUCKETS> {
             ht: self,
             bucket: 0,
             node,
@@ -355,12 +331,12 @@ impl<
         'a,
         K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<HashNode<K, V>, 4>,
         const NUM_BUCKETS: usize,
-        const MAX_SIZE: usize,
-    > IntoIterator for &'a HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
+    > IntoIterator for &'a HashTable<'a, K, V, Allocator, NUM_BUCKETS>
 {
     type Item = (&'a K, &'a V);
-    type IntoIter = HashTableIterator<'a, K, V, NUM_BUCKETS, MAX_SIZE>;
+    type IntoIter = HashTableIterator<'a, K, V, Allocator, NUM_BUCKETS>;
 
     fn into_iter(self) -> Self::IntoIter {
         self._iter()
@@ -371,12 +347,12 @@ impl<
         'a,
         K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<HashNode<K, V>, 4>,
         const NUM_BUCKETS: usize,
-        const MAX_SIZE: usize,
-    > IntoIterator for &'a mut HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
+    > IntoIterator for &'a mut HashTable<'a, K, V, Allocator, NUM_BUCKETS>
 {
     type Item = (&'a K, &'a mut V);
-    type IntoIter = HashTableIteratorMut<'a, K, V, NUM_BUCKETS, MAX_SIZE>;
+    type IntoIter = HashTableIteratorMut<'a, 'a, K, V, Allocator, NUM_BUCKETS>;
 
     fn into_iter(self) -> Self::IntoIter {
         self._iter_mut()
@@ -387,10 +363,10 @@ pub struct HashTableIterator<
     'a,
     K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
+    Allocator: NodeAllocator<HashNode<K, V>, 4>,
     const NUM_BUCKETS: usize,
-    const MAX_SIZE: usize,
 > {
-    ht: &'a HashTable<K, V, NUM_BUCKETS, MAX_SIZE>,
+    ht: &'a HashTable<'a, K, V, Allocator, NUM_BUCKETS>,
     bucket: usize,
     node: u32,
 }
@@ -399,9 +375,9 @@ impl<
         'a,
         K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<HashNode<K, V>, 4>,
         const NUM_BUCKETS: usize,
-        const MAX_SIZE: usize,
-    > Iterator for HashTableIterator<'a, K, V, NUM_BUCKETS, MAX_SIZE>
+    > Iterator for HashTableIterator<'a, K, V, Allocator, NUM_BUCKETS>
 {
     type Item = (&'a K, &'a V);
 
@@ -428,9 +404,9 @@ impl<
         'a,
         K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<HashNode<K, V>, 4>,
         const NUM_BUCKETS: usize,
-        const MAX_SIZE: usize,
-    > DoubleEndedIterator for HashTableIterator<'a, K, V, NUM_BUCKETS, MAX_SIZE>
+    > DoubleEndedIterator for HashTableIterator<'a, K, V, Allocator, NUM_BUCKETS>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         None
@@ -438,24 +414,30 @@ impl<
 }
 
 pub struct HashTableIteratorMut<
+    'tree,
     'a,
     K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
     V: Default + Copy + Clone + Pod + Zeroable,
+    Allocator: NodeAllocator<HashNode<K, V>, 4>,
     const NUM_BUCKETS: usize,
-    const MAX_SIZE: usize,
-> {
-    ht: &'a mut HashTable<K, V, NUM_BUCKETS, MAX_SIZE>,
+> where
+    'a: 'tree,
+{
+    ht: &'tree mut HashTable<'a, K, V, Allocator, NUM_BUCKETS>,
     bucket: usize,
     node: u32,
 }
 
 impl<
+        'tree,
         'a,
         K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<HashNode<K, V>, 4>,
         const NUM_BUCKETS: usize,
-        const MAX_SIZE: usize,
-    > Iterator for HashTableIteratorMut<'a, K, V, NUM_BUCKETS, MAX_SIZE>
+    > Iterator for HashTableIteratorMut<'tree, 'a, K, V, Allocator, NUM_BUCKETS>
+where
+    'a: 'tree,
 {
     type Item = (&'a K, &'a mut V);
 
@@ -471,10 +453,14 @@ impl<
             }
             let ptr = self.node;
             self.node = self.ht.get_next(self.node);
-            // TODO: How does one remove this unsafe?
+            // SAFETY: This is required to extend the lifetime of the mutable reference
+            // to 'a, but Rust's borrow checker cannot prove this is safe. The iterator
+            // guarantees only one mutable reference to each node at a time, and the
+            // iterator itself is unique, so this is sound as long as the iterator is
+            // not misused (e.g., aliased or cloned).
             unsafe {
-                let node =
-                    (*self.ht.allocator.nodes.as_mut_ptr().add((ptr - 1) as usize)).get_value_mut();
+                let node: &mut HashNode<_, _> =
+                    &mut *(&mut *self.ht.allocator.get_mut(ptr).get_value_mut() as *mut _);
                 Some((&node.key, &mut node.value))
             }
         } else {
@@ -484,12 +470,15 @@ impl<
 }
 
 impl<
+        'tree,
         'a,
         K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<HashNode<K, V>, 4>,
         const NUM_BUCKETS: usize,
-        const MAX_SIZE: usize,
-    > DoubleEndedIterator for HashTableIteratorMut<'a, K, V, NUM_BUCKETS, MAX_SIZE>
+    > DoubleEndedIterator for HashTableIteratorMut<'tree, 'a, K, V, Allocator, NUM_BUCKETS>
+where
+    'a: 'tree,
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         None
@@ -497,11 +486,12 @@ impl<
 }
 
 impl<
+        'a,
         K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<HashNode<K, V>, 4>,
         const NUM_BUCKETS: usize,
-        const MAX_SIZE: usize,
-    > Index<&K> for HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
+    > Index<&K> for HashTable<'a, K, V, Allocator, NUM_BUCKETS>
 {
     type Output = V;
 
@@ -511,11 +501,12 @@ impl<
 }
 
 impl<
+        'a,
         K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
+        Allocator: NodeAllocator<HashNode<K, V>, 4>,
         const NUM_BUCKETS: usize,
-        const MAX_SIZE: usize,
-    > IndexMut<&K> for HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
+    > IndexMut<&K> for HashTable<'a, K, V, Allocator, NUM_BUCKETS>
 {
     fn index_mut(&mut self, index: &K) -> &mut Self::Output {
         self.get_mut(index).unwrap()

@@ -9,11 +9,11 @@ use std::{
 };
 
 use crate::{
+    container::Container,
     node_allocator::{
-        NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap, TreeField as Field, ZeroCopy,
-        SENTINEL,
+        MultiArenaNodeAllocator, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap,
+        SimpleNodeAllocator, TreeField as Field, ZeroCopy, SENTINEL,
     },
-    traits::Container,
 };
 
 pub const ALIGNMENT: u32 = 8;
@@ -76,6 +76,19 @@ pub struct RedBlackTreeHeader {
 unsafe impl Zeroable for RedBlackTreeHeader {}
 unsafe impl Pod for RedBlackTreeHeader {}
 impl ZeroCopy for RedBlackTreeHeader {}
+
+pub type StaticRedBlackTree<
+    'a,
+    K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+    const MAX_SIZE: usize,
+> = RedBlackTree<'a, K, V, SimpleNodeAllocator<RBNode<K, V>, MAX_SIZE, 4>>;
+
+pub type DynamicRedBlackTree<
+    'a,
+    K: PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+> = RedBlackTree<'a, K, V, MultiArenaNodeAllocator<'a, RBNode<K, V>, 4>>;
 
 pub type RedBlackTree<
     'a,
@@ -282,6 +295,8 @@ impl<
 
     #[inline(always)]
     pub fn initialize(&mut self) {
+        Self::assert_proper_alignment();
+        self.allocator.assert_proper_alignment();
         self.allocator.initialize();
     }
 
