@@ -5,25 +5,6 @@ use crate::ZeroCopy;
 
 use super::{Node, NodeAllocator, SENTINEL};
 
-/// Returns the number of nodes in an arena
-pub const fn size_of_nodes<
-    T: Default + Copy + Clone + Pod + Zeroable,
-    const NUM_REGISTERS: usize,
->(
-    num_nodes: usize,
-) -> usize {
-    std::mem::size_of::<Node<T, NUM_REGISTERS>>() * num_nodes
-}
-
-pub const fn max_number_of_nodes_in_block<
-    T: Default + Copy + Clone + Pod + Zeroable,
-    const NUM_REGISTERS: usize,
->(
-    max_block_size: usize,
-) -> usize {
-    max_block_size / std::mem::size_of::<Node<T, NUM_REGISTERS>>()
-}
-
 /**
  * Superblock consists of the header and a vector containing the size of each arena
  * The reader is a proxy type for zero-copy deserialization of the superblock

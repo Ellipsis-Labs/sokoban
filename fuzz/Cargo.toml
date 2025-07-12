@@ -46,3 +46,21 @@ name = "fuzz_avl_tree"
 path = "fuzz_targets/fuzz_avl_tree.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "fuzz_red_black_tree_multi_arena"
+path = "fuzz_targets/fuzz_red_black_tree_multi_arena.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_hash_table_multi_arena"
+path = "fuzz_targets/fuzz_hash_table_multi_arena.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_avl_tree_multi_arena"
+path = "fuzz_targets/fuzz_avl_tree_multi_arena.rs"
+test = false
+doc = false

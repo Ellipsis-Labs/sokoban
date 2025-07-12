@@ -6,7 +6,6 @@ extern crate test;
 mod bench_tests {
     use rand::seq::SliceRandom;
     use rand::{self, Rng};
-    use sokoban::node_allocator::size_of_nodes;
     use sokoban::node_allocator::NodeAllocatorMap;
     use sokoban::red_black_tree::RBNode;
     use sokoban::*;
@@ -38,8 +37,7 @@ mod bench_tests {
         arena_size: usize,
     ) -> (Vec<u8>, Vec<Vec<u8>>) {
         let superblock_buf = vec![0u8; RBTreeMultiArena::size_of_header()];
-        let arena_bufs =
-            vec![vec![0u8; size_of_nodes::<RBNode<u128, u128>, 4>(arena_size)]; num_arenas];
+        let arena_bufs = vec![vec![0u8; RBTreeMultiArena::size_of_nodes(arena_size)]; num_arenas];
         (superblock_buf, arena_bufs)
     }
 

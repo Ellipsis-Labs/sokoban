@@ -5,9 +5,7 @@ mod simple;
 use bytemuck::{Pod, Zeroable};
 
 pub use helper::*;
-pub use multi_arena::{
-    max_number_of_nodes_in_block, size_of_nodes, MultiArenaNodeAllocator, Superblock,
-};
+pub use multi_arena::{MultiArenaNodeAllocator, Superblock};
 pub use simple::SimpleNodeAllocator;
 
 /// This trait provides an API for map-like data structures that use the NodeAllocator

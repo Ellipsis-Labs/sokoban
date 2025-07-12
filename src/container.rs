@@ -6,7 +6,7 @@ use std::{
 use bytemuck::{Pod, Zeroable};
 
 use crate::{
-    node_allocator::{MultiArenaNodeAllocator, SimpleNodeAllocator, Superblock},
+    node_allocator::{MultiArenaNodeAllocator, Node, SimpleNodeAllocator, Superblock},
     NodeAllocator, ZeroCopy,
 };
 
@@ -126,8 +126,16 @@ impl<
         }
     }
 
-    pub fn size_of_header() -> usize {
+    pub const fn size_of_header() -> usize {
         std::mem::size_of::<Superblock>() + std::mem::size_of::<HeaderType>()
+    }
+
+    pub const fn size_of_nodes(num_nodes: usize) -> usize {
+        std::mem::size_of::<Node<NodeType, NUM_REGISTERS>>() * num_nodes
+    }
+
+    pub const fn max_number_of_nodes_in_block(max_block_size: usize) -> usize {
+        max_block_size / std::mem::size_of::<Node<NodeType, NUM_REGISTERS>>()
     }
 }
 

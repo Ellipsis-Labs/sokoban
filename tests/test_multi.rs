@@ -7,8 +7,6 @@ use rand::rngs::ThreadRng;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use rand::{self, Rng};
-use sokoban::node_allocator::max_number_of_nodes_in_block;
-use sokoban::node_allocator::size_of_nodes;
 use sokoban::node_allocator::Node;
 use sokoban::node_allocator::NodeAllocatorMap;
 use sokoban::red_black_tree::RBNode;
@@ -281,12 +279,10 @@ fn simulate<K: std::fmt::Debug + Clone + Copy + Zeroable + Pod + Ord, T>(
 
 #[test]
 fn test_node_number_calculation() {
+    type RBTree<'a> = DynamicRedBlackTree<'a, u64, Widget>;
     const TEN_MILLION: usize = 10 * 1024 * 1024;
-    const BLOCK_SIZE: usize = max_number_of_nodes_in_block::<RBNode<u64, Widget>, 4>(TEN_MILLION);
-    assert_eq!(
-        size_of_nodes::<RBNode<u64, Widget>, 4>(BLOCK_SIZE),
-        TEN_MILLION
-    );
+    const BLOCK_SIZE: usize = RBTree::max_number_of_nodes_in_block(TEN_MILLION);
+    assert_eq!(RBTree::size_of_nodes(BLOCK_SIZE), TEN_MILLION);
     assert_eq!(
         std::mem::size_of::<[Node<RBNode<u64, Widget>, 4>; BLOCK_SIZE]>(),
         TEN_MILLION
@@ -299,7 +295,7 @@ async fn test_simulate_red_black_tree() {
 
     // 4 arenas (4000, 4000, 4000, 4000)
     let mut header_buf = vec![0u8; RBTree::size_of_header()];
-    let mut arena_buf = vec![vec![0u8; size_of_nodes::<RBNode<u64, Widget>, 4>(MAX_SIZE / 4)]; 4];
+    let mut arena_buf = vec![vec![0u8; RBTree::size_of_nodes(MAX_SIZE / 4)]; 4];
 
     let mut arena_slices: Vec<&mut [u8]> = arena_buf.iter_mut().map(|a| a.as_mut_slice()).collect();
 
@@ -323,8 +319,8 @@ async fn test_simulate_red_black_tree_with_partial_arenas() {
 
     // 4 arenas (6000, 6000, 6000, 2000)
     let mut header_buf = vec![0u8; RBTree::size_of_header()];
-    let mut arena_buf = vec![vec![0u8; size_of_nodes::<RBNode<u64, Widget>, 4>(6000)]; 3];
-    arena_buf.push(vec![0u8; size_of_nodes::<RBNode<u64, Widget>, 4>(2000)]);
+    let mut arena_buf = vec![vec![0u8; RBTree::size_of_nodes(6000)]; 3];
+    arena_buf.push(vec![0u8; RBTree::size_of_nodes(2000)]);
 
     let mut arena_slices: Vec<&mut [u8]> = arena_buf.iter_mut().map(|a| a.as_mut_slice()).collect();
 
@@ -348,8 +344,8 @@ async fn test_simulate_red_black_tree_with_resize_up() {
 
     // 4 arenas (6000, 6000, 6000, 2000)
     let mut header_buf = vec![0u8; RBTree::size_of_header()];
-    let mut arena_buf = vec![vec![0u8; size_of_nodes::<RBNode<u64, Widget>, 4>(6000)]; 3];
-    arena_buf.push(vec![0u8; size_of_nodes::<RBNode<u64, Widget>, 4>(2000)]);
+    let mut arena_buf = vec![vec![0u8; RBTree::size_of_nodes(6000)]; 3];
+    arena_buf.push(vec![0u8; RBTree::size_of_nodes(2000)]);
 
     let sampled_key_val = {
         let mut arena_slices: Vec<&mut [u8]> =
@@ -389,7 +385,7 @@ async fn test_simulate_red_black_tree_with_resize_up() {
 
     {
         println!("Resizing up");
-        arena_buf[3].resize(size_of_nodes::<RBNode<u64, Widget>, 4>(4000), 0);
+        arena_buf[3].resize(RBTree::size_of_nodes(4000), 0);
         let mut arena_slices: Vec<&mut [u8]> =
             arena_buf.iter_mut().map(|a| a.as_mut_slice()).collect();
 
