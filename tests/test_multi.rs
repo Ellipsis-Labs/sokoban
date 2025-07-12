@@ -9,7 +9,6 @@ use rand::thread_rng;
 use rand::{self, Rng};
 use sokoban::node_allocator::max_number_of_nodes_in_block;
 use sokoban::node_allocator::size_of_nodes;
-use sokoban::node_allocator::MultiArenaNodeAllocator;
 use sokoban::node_allocator::Node;
 use sokoban::node_allocator::NodeAllocatorMap;
 use sokoban::node_allocator::Superblock;
@@ -311,9 +310,7 @@ async fn test_simulate_red_black_tree() {
         superblock.initialize(4, MAX_SIZE, MAX_SIZE / 4);
     }
 
-    let mut tree =
-        RBTree::load_from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
-    tree.initialize();
+    let mut tree = RBTree::new_from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
     println!("Tree initialized");
     assert_eq!(tree.allocator.superblock.num_active_arenas, 4);
     assert_eq!(tree.allocator.arenas.len(), 4);
@@ -338,9 +335,7 @@ async fn test_simulate_red_black_tree_with_partial_arenas() {
         superblock.initialize(4, MAX_SIZE, 6000);
     }
 
-    let mut tree =
-        RBTree::load_from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
-    tree.initialize();
+    let mut tree = RBTree::new_from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
     println!("Tree initialized");
     assert_eq!(tree.allocator.superblock.num_active_arenas, 4);
     assert_eq!(tree.allocator.arenas.len(), 4);
@@ -373,8 +368,7 @@ async fn test_simulate_red_black_tree_with_resize_up() {
         let mut arena_slices: Vec<&mut [u8]> =
             arena_buf.iter_mut().map(|a| a.as_mut_slice()).collect();
         let mut tree =
-            RBTree::load_from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
-        tree.initialize();
+            RBTree::new_from_buffers(header_buf.as_mut_slice(), arena_slices.as_mut_slice());
         println!("Tree initialized");
         assert_eq!(tree.allocator.superblock.num_active_arenas, 4);
         assert_eq!(tree.allocator.arenas.len(), 4);

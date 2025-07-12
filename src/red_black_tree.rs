@@ -4,12 +4,13 @@ use num_traits::FromPrimitive;
 use std::{
     cmp::Ordering,
     fmt::Debug,
+    marker::PhantomData,
     ops::{Index, IndexMut},
     vec,
 };
 
 use crate::{
-    container::Container,
+    container::{AssertProperAlignment, Container},
     node_allocator::{
         MultiArenaNodeAllocator, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap,
         SimpleNodeAllocator, TreeField as Field, ZeroCopy, SENTINEL,
@@ -68,17 +69,48 @@ impl<
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct RedBlackTreeHeader {
+pub struct RedBlackTreeHeader<K, V>
+where
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+{
     pub root: u32,
     _padding: [u32; 3],
+    phantom: PhantomData<(K, V)>,
 }
 
-unsafe impl Zeroable for RedBlackTreeHeader {}
-unsafe impl Pod for RedBlackTreeHeader {}
-impl ZeroCopy for RedBlackTreeHeader {}
+unsafe impl<K, V> Zeroable for RedBlackTreeHeader<K, V>
+where
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+{
+}
+unsafe impl<K, V> Pod for RedBlackTreeHeader<K, V>
+where
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+{
+}
+impl<K, V> ZeroCopy for RedBlackTreeHeader<K, V>
+where
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+{
+}
+impl<K, V> AssertProperAlignment for RedBlackTreeHeader<K, V>
+where
+    K: Debug + PartialOrd + Ord + Copy + Clone + Default + Pod + Zeroable,
+    V: Default + Copy + Clone + Pod + Zeroable,
+{
+    fn assert_proper_alignment() {
+        assert!(std::mem::size_of::<V>() % std::mem::align_of::<K>() == 0);
+        assert!(std::mem::size_of::<RBNode<K, V>>() % std::mem::align_of::<RBNode<K, V>>() == 0);
+        assert!(std::mem::size_of::<RBNode<K, V>>() % 8_usize == 0);
+    }
+}
 
 pub type RedBlackTree<'a, K, V, Allocator> =
-    Container<'a, RedBlackTreeHeader, RBNode<K, V>, Allocator, 4>;
+    Container<'a, RedBlackTreeHeader<K, V>, RBNode<K, V>, Allocator, 4>;
 pub type StaticRedBlackTree<'a, K, V, const MAX_SIZE: usize> =
     RedBlackTree<'a, K, V, SimpleNodeAllocator<RBNode<K, V>, MAX_SIZE, 4>>;
 pub type DynamicRedBlackTree<'a, K, V> =
@@ -230,13 +262,6 @@ impl<
         println!("{}", s);
     }
 
-    fn assert_proper_alignment() {
-        // TODO is this a sufficient coverage of the edge cases?
-        assert!(std::mem::size_of::<V>() % std::mem::align_of::<K>() == 0);
-        assert!(std::mem::size_of::<RBNode<K, V>>() % std::mem::align_of::<RBNode<K, V>>() == 0);
-        assert!(std::mem::size_of::<RBNode<K, V>>() % 8_usize == 0);
-    }
-
     pub fn is_valid_red_black_tree(&self) -> bool {
         if self.len() == 0 {
             return true;
@@ -278,13 +303,6 @@ impl<
             println!("Invalid Red-Black Tree: All paths must have the same number of black nodes",);
         }
         balanced
-    }
-
-    #[inline(always)]
-    pub fn initialize(&mut self) {
-        Self::assert_proper_alignment();
-        self.allocator.assert_proper_alignment();
-        self.allocator.initialize();
     }
 
     pub fn get_node(&self, node: u32) -> &RBNode<K, V> {
@@ -957,8 +975,7 @@ mod test {
     fn test_insert_with_red_parent_and_uncle() {
         type Rbt<'a> = SimpleRedBlackTree<'a, 1024>;
         let mut buf = vec![0u8; Rbt::size_of_buffer()];
-        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
-        tree.initialize();
+        let mut tree = Rbt::new_from_buffer(buf.as_mut_slice());
         let addrs = vec![
             tree.insert(61, 0).unwrap(),
             tree.insert(52, 0).unwrap(),
@@ -999,8 +1016,7 @@ mod test {
     fn test_right_insert_with_red_right_child_parent_and_black_uncle() {
         type Rbt<'a> = SimpleRedBlackTree<'a, 1024>;
         let mut buf = vec![0u8; Rbt::size_of_buffer()];
-        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
-        tree.initialize();
+        let mut tree = Rbt::new_from_buffer(buf.as_mut_slice());
         let addrs = vec![
             tree.insert(61, 0).unwrap(),
             tree.insert(52, 0).unwrap(),
@@ -1045,8 +1061,7 @@ mod test {
     fn test_left_insert_with_red_right_child_parent_and_black_uncle() {
         type Rbt<'a> = SimpleRedBlackTree<'a, 1024>;
         let mut buf = vec![0u8; Rbt::size_of_buffer()];
-        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
-        tree.initialize();
+        let mut tree = Rbt::new_from_buffer(buf.as_mut_slice());
         let addrs = vec![
             tree.insert(61, 0).unwrap(),
             tree.insert(52, 0).unwrap(),
@@ -1091,8 +1106,7 @@ mod test {
     fn test_left_insert_with_red_left_child_parent_and_black_uncle() {
         type Rbt<'a> = SimpleRedBlackTree<'a, 1024>;
         let mut buf = vec![0u8; Rbt::size_of_buffer()];
-        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
-        tree.initialize();
+        let mut tree = Rbt::new_from_buffer(buf.as_mut_slice());
         let addrs = vec![
             tree.insert(61, 0).unwrap(),
             tree.insert(85, 0).unwrap(),
@@ -1137,8 +1151,7 @@ mod test {
     fn test_right_insert_with_red_left_child_parent_and_black_uncle() {
         type Rbt<'a> = SimpleRedBlackTree<'a, 1024>;
         let mut buf = vec![0u8; Rbt::size_of_buffer()];
-        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
-        tree.initialize();
+        let mut tree = Rbt::new_from_buffer(buf.as_mut_slice());
         let addrs = vec![
             tree.insert(61, 0).unwrap(),
             tree.insert(85, 0).unwrap(),
@@ -1185,8 +1198,7 @@ mod test {
     fn test_delete_multiple_random_1023() {
         type Rbt<'a> = SimpleRedBlackTree<'a, 1023>;
         let mut buf = vec![0u8; Rbt::size_of_buffer()];
-        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
-        tree.initialize();
+        let mut tree = Rbt::new_from_buffer(buf.as_mut_slice());
         let mut keys = vec![];
         // Fill up tree
         for k in 0..1023 {
@@ -1208,8 +1220,7 @@ mod test {
     fn test_delete_multiple_random_1024() {
         type Rbt<'a> = SimpleRedBlackTree<'a, 1024>;
         let mut buf = vec![0u8; Rbt::size_of_buffer()];
-        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
-        tree.initialize();
+        let mut tree = Rbt::new_from_buffer(buf.as_mut_slice());
         let mut keys = vec![];
         let mut addrs = vec![];
         // Fill up tree
@@ -1236,8 +1247,7 @@ mod test {
     fn test_delete_multiple_random_2048() {
         type Rbt<'a> = SimpleRedBlackTree<'a, 2048>;
         let mut buf = vec![0u8; Rbt::size_of_buffer()];
-        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
-        tree.initialize();
+        let mut tree = Rbt::new_from_buffer(buf.as_mut_slice());
         let mut keys = vec![];
         // Fill up tree
         for k in 0..2048 {
@@ -1255,8 +1265,7 @@ mod test {
             .collect::<BTreeMap<_, _>>();
 
         let mut buf = vec![0u8; Rbt::size_of_buffer()];
-        let mut index_tree = Rbt::load_from_buffer(buf.as_mut_slice());
-        index_tree.initialize();
+        let mut index_tree = Rbt::new_from_buffer(buf.as_mut_slice());
         let mut index_keys = vec![];
 
         for k in keys.iter() {
@@ -1276,8 +1285,7 @@ mod test {
     fn test_delete_multiple_random_512() {
         type Rbt<'a> = SimpleRedBlackTree<'a, 512>;
         let mut buf = vec![0u8; Rbt::size_of_buffer()];
-        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
-        tree.initialize();
+        let mut tree = Rbt::new_from_buffer(buf.as_mut_slice());
         let mut keys = vec![];
         // Fill up tree
         for k in 0..512 {
@@ -1298,8 +1306,7 @@ mod test {
     fn test_delete_multiple_random_4098() {
         type Rbt<'a> = SimpleRedBlackTree<'a, 4098>;
         let mut buf = vec![0u8; Rbt::size_of_buffer()];
-        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
-        tree.initialize();
+        let mut tree = Rbt::new_from_buffer(buf.as_mut_slice());
         let mut keys = vec![];
         // Fill up tree
         for k in 0..4098 {
@@ -1320,8 +1327,7 @@ mod test {
     fn remove_root() {
         type Rbt<'a> = SimpleRedBlackTree<'a, 4098>;
         let mut buf = vec![0u8; Rbt::size_of_buffer()];
-        let mut tree = Rbt::load_from_buffer(buf.as_mut_slice());
-        tree.initialize();
+        let mut tree = Rbt::new_from_buffer(buf.as_mut_slice());
 
         // Returns none when empty
         assert!(tree.remove_root().is_none());

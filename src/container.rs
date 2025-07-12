@@ -10,9 +10,13 @@ use crate::{
     NodeAllocator, ZeroCopy,
 };
 
+pub trait AssertProperAlignment {
+    fn assert_proper_alignment() {}
+}
+
 pub struct Container<
     'a,
-    HeaderType: Pod + Zeroable + ZeroCopy,
+    HeaderType: Pod + Zeroable + ZeroCopy + AssertProperAlignment,
     NodeType: Pod + Zeroable + Copy + Default,
     Allocator: NodeAllocator<NodeType, NUM_REGISTERS>,
     const NUM_REGISTERS: usize,
@@ -24,7 +28,7 @@ pub struct Container<
 
 impl<
         'a,
-        HeaderType: Pod + Zeroable + ZeroCopy,
+        HeaderType: Pod + Zeroable + ZeroCopy + AssertProperAlignment,
         NodeType: Pod + Zeroable + Copy + Default,
         const MAX_SIZE: usize,
         const NUM_REGISTERS: usize,
@@ -52,6 +56,12 @@ impl<
         }
     }
 
+    pub fn new_from_buffer(buf: &'a mut [u8]) -> Self {
+        let mut this = Self::load_from_buffer(buf);
+        this.initialize();
+        this
+    }
+
     pub fn size_of_buffer() -> usize {
         std::mem::size_of::<HeaderType>()
             + std::mem::size_of::<SimpleNodeAllocator<NodeType, MAX_SIZE, NUM_REGISTERS>>()
@@ -60,7 +70,7 @@ impl<
 
 impl<
         'a,
-        HeaderType: Pod + Zeroable + ZeroCopy,
+        HeaderType: Pod + Zeroable + ZeroCopy + AssertProperAlignment,
         NodeType: Pod + Zeroable + Copy + Default,
         const NUM_REGISTERS: usize,
     >
@@ -87,6 +97,12 @@ impl<
         }
     }
 
+    pub fn new_from_buffers(buf: &'a mut [u8], arena_bufs: &'a mut [&'a mut [u8]]) -> Self {
+        let this = Self::load_from_buffers(buf, arena_bufs);
+        this.allocator.initialize();
+        this
+    }
+
     pub fn size_of_header() -> usize {
         std::mem::size_of::<Superblock>() + std::mem::size_of::<HeaderType>()
     }
@@ -94,7 +110,7 @@ impl<
 
 impl<
         'a,
-        HeaderType: Pod + Zeroable + ZeroCopy,
+        HeaderType: Pod + Zeroable + ZeroCopy + AssertProperAlignment,
         NodeType: Pod + Zeroable + Copy + Default,
         Allocator: NodeAllocator<NodeType, NUM_REGISTERS>,
         const NUM_REGISTERS: usize,
@@ -109,7 +125,7 @@ impl<
 
 impl<
         'a,
-        HeaderType: Pod + Zeroable + ZeroCopy,
+        HeaderType: Pod + Zeroable + ZeroCopy + AssertProperAlignment,
         NodeType: Pod + Zeroable + Copy + Default,
         Allocator: NodeAllocator<NodeType, NUM_REGISTERS>,
         const NUM_REGISTERS: usize,
@@ -117,5 +133,20 @@ impl<
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.header
+    }
+}
+
+impl<
+        'a,
+        HeaderType: Pod + Zeroable + ZeroCopy + AssertProperAlignment,
+        NodeType: Pod + Zeroable + Copy + Default,
+        Allocator: NodeAllocator<NodeType, NUM_REGISTERS>,
+        const NUM_REGISTERS: usize,
+    > Container<'a, HeaderType, NodeType, Allocator, NUM_REGISTERS>
+{
+    pub fn initialize(&mut self) {
+        HeaderType::assert_proper_alignment();
+        self.allocator.assert_proper_alignment();
+        self.allocator.initialize();
     }
 }

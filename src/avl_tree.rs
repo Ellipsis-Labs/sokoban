@@ -5,6 +5,7 @@ use std::{
 };
 
 use crate::{
+    container::AssertProperAlignment,
     node_allocator::{
         MultiArenaNodeAllocator, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap,
         SimpleNodeAllocator, ZeroCopy, SENTINEL,
@@ -83,6 +84,7 @@ impl Default for AVLTreeHeader {
         }
     }
 }
+impl AssertProperAlignment for AVLTreeHeader {}
 
 pub type AVLTree<'a, K, V, Allocator> =
     Container<'a, AVLTreeHeader, AVLNode<K, V>, Allocator, REGISTERS>;
@@ -224,10 +226,6 @@ impl<
         Allocator: NodeAllocator<AVLNode<K, V>, REGISTERS>,
     > AVLTree<'a, K, V, Allocator>
 {
-    pub fn initialize(&mut self) {
-        self.allocator.initialize();
-    }
-
     pub fn get_node(&self, node: u32) -> &AVLNode<K, V> {
         self.allocator.get(node).get_value()
     }

@@ -1,3 +1,4 @@
+use crate::container::AssertProperAlignment;
 use crate::node_allocator::{
     MultiArenaNodeAllocator, NodeAllocator, NodeAllocatorMap, NodeField, SimpleNodeAllocator,
     ZeroCopy, SENTINEL,
@@ -58,6 +59,11 @@ impl<const NUM_BUCKETS: usize> Default for HashTableHeader<NUM_BUCKETS> {
         Self {
             buckets: [SENTINEL; NUM_BUCKETS],
         }
+    }
+}
+impl<const NUM_BUCKETS: usize> AssertProperAlignment for HashTableHeader<NUM_BUCKETS> {
+    fn assert_proper_alignment() {
+        assert!(NUM_BUCKETS % 2 == 0);
     }
 }
 
@@ -178,14 +184,6 @@ impl<
         const NUM_BUCKETS: usize,
     > HashTable<'a, K, V, Allocator, NUM_BUCKETS>
 {
-    fn assert_proper_alignment() {
-        assert!(NUM_BUCKETS % 2 == 0);
-    }
-
-    pub fn initialize(&mut self) {
-        self.allocator.initialize();
-    }
-
     pub fn get_next(&self, index: u32) -> u32 {
         self.allocator.get_register(index, NodeField::Right as u32)
     }

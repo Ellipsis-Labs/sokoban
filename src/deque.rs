@@ -1,5 +1,5 @@
 use crate::{
-    container::Container,
+    container::{AssertProperAlignment, Container},
     node_allocator::{
         MultiArenaNodeAllocator, NodeAllocator, SimpleNodeAllocator, ZeroCopy, SENTINEL,
     },
@@ -30,6 +30,7 @@ impl Default for DequeHeader {
         }
     }
 }
+impl AssertProperAlignment for DequeHeader {}
 
 pub type Deque<'a, T, Allocator> = Container<'a, DequeHeader, T, Allocator, 2>;
 pub type StaticDeque<'a, T, const MAX_SIZE: usize> =
@@ -39,10 +40,6 @@ pub type DynamicDeque<'a, T> = Deque<'a, T, MultiArenaNodeAllocator<'a, T, 2>>;
 impl<'a, T: Default + Copy + Clone + Pod + Zeroable, Allocator: NodeAllocator<T, 2>>
     Deque<'a, T, Allocator>
 {
-    pub fn initialize(&mut self) {
-        self.allocator.initialize();
-    }
-
     pub fn front(&self) -> Option<&T> {
         if self.head == SENTINEL {
             return None;
@@ -314,8 +311,7 @@ fn test_deque() {
     type Q<'a> = StaticDeque<'a, u64, 1024>;
     let mut buf = vec![0u8; Q::size_of_buffer()];
     let mut v = VecDeque::new();
-    let mut q = Q::load_from_buffer(buf.as_mut_slice());
-    q.initialize();
+    let mut q = Q::new_from_buffer(buf.as_mut_slice());
     (0..128).for_each(|_| {
         let t = rng.gen::<u64>();
         q.push_back(t);

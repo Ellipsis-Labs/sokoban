@@ -285,8 +285,7 @@ fn simulate<K: std::fmt::Debug + Clone + Copy + Zeroable + Pod + Ord, T>(
 async fn test_simulate_red_black_tree() {
     type RBTree<'a> = StaticRedBlackTree<'a, u64, Widget, MAX_SIZE>;
     let mut buf = vec![0u8; RBTree::size_of_buffer()];
-    let mut tree = RBTree::load_from_buffer(buf.as_mut_slice());
-    tree.initialize();
+    let mut tree = RBTree::new_from_buffer(buf.as_mut_slice());
     simulate::<u64, RBTree>(true, &mut tree);
 }
 
@@ -295,8 +294,7 @@ async fn test_simulate_hash_table() {
     const NUM_BUCKETS: usize = MAX_SIZE >> 2;
     type HashMap<'a> = StaticHashTable<'a, u64, Widget, NUM_BUCKETS, MAX_SIZE>;
     let mut buf = vec![0u8; HashMap::size_of_buffer()];
-    let mut tree = HashMap::load_from_buffer(buf.as_mut_slice());
-    tree.initialize();
+    let mut tree = HashMap::new_from_buffer(buf.as_mut_slice());
     simulate::<u64, HashMap>(false, &mut tree);
 }
 
@@ -304,8 +302,7 @@ async fn test_simulate_hash_table() {
 async fn test_simulate_avl_tree() {
     type AVLTreeMap<'a> = StaticAVLTree<'a, u64, Widget, MAX_SIZE>;
     let mut buf = vec![0u8; AVLTreeMap::size_of_buffer()];
-    let mut tree = AVLTreeMap::load_from_buffer(buf.as_mut_slice());
-    tree.initialize();
+    let mut tree = AVLTreeMap::new_from_buffer(buf.as_mut_slice());
     simulate::<u64, AVLTreeMap>(true, &mut tree);
 }
 

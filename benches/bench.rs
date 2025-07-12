@@ -74,8 +74,7 @@ mod bench_tests {
     fn bench_sokoban_red_black_tree_insert_1000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; RBTree1K::size_of_buffer()];
-        let mut m = RBTree1K::load_from_buffer(buf.as_mut_slice());
-        m.initialize();
+        let mut m = RBTree1K::new_from_buffer(buf.as_mut_slice());
         b.iter(|| {
             for v in 0..1000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -90,11 +89,10 @@ mod bench_tests {
             prepare_memories_for_multi_arena(4, (MAX_SIZE / 4).next_power_of_two());
         let mut arena_slices: Vec<&mut [u8]> =
             arena_bufs.iter_mut().map(|a| a.as_mut_slice()).collect();
-        let mut m = RBTreeMultiArena::load_from_buffers(
+        let mut m = RBTreeMultiArena::new_from_buffers(
             superblock_buf.as_mut_slice(),
             arena_slices.as_mut_slice(),
         );
-        m.initialize();
         b.iter(|| {
             for v in 0..1000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -106,8 +104,7 @@ mod bench_tests {
     fn bench_sokoban_hash_map_insert_1000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; SHashMap1K::size_of_buffer()];
-        let mut m = SHashMap1K::load_from_buffer(buf.as_mut_slice());
-        m.initialize();
+        let mut m = SHashMap1K::new_from_buffer(buf.as_mut_slice());
         b.iter(|| {
             for v in 0..1000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -131,8 +128,7 @@ mod bench_tests {
     fn bench_sokoban_avl_tree_insert_1000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; AVLTreeMap1K::size_of_buffer()];
-        let mut m = AVLTreeMap1K::load_from_buffer(buf.as_mut_slice());
-        m.initialize();
+        let mut m = AVLTreeMap1K::new_from_buffer(buf.as_mut_slice());
         b.iter(|| {
             for v in 0..1000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -144,8 +140,7 @@ mod bench_tests {
     fn bench_sokoban_red_black_tree_insert_1000_u128_stack(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; RBTree1K::size_of_buffer()];
-        let mut m = RBTree1K::load_from_buffer(buf.as_mut_slice());
-        m.initialize();
+        let mut m = RBTree1K::new_from_buffer(buf.as_mut_slice());
         b.iter(|| {
             for v in 0..1000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -157,8 +152,7 @@ mod bench_tests {
     fn bench_sokoban_hash_map_insert_1000_u128_stack(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; SHashMap1K::size_of_buffer()];
-        let mut m = SHashMap1K::load_from_buffer(buf.as_mut_slice());
-        m.initialize();
+        let mut m = SHashMap1K::new_from_buffer(buf.as_mut_slice());
         b.iter(|| {
             for v in 0..1000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -181,8 +175,7 @@ mod bench_tests {
     fn bench_sokoban_avl_tree_insert_1000_u128_stack(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; AVLTreeMap1K::size_of_buffer()];
-        let mut m = AVLTreeMap1K::load_from_buffer(buf.as_mut_slice());
-        m.initialize();
+        let mut m = AVLTreeMap1K::new_from_buffer(buf.as_mut_slice());
         b.iter(|| {
             for v in 0..1000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -216,8 +209,7 @@ mod bench_tests {
     fn bench_sokoban_red_black_tree_insert_20000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; RBTree::size_of_buffer()];
-        let mut m = RBTree::load_from_buffer(buf.as_mut_slice());
-        m.initialize();
+        let mut m = RBTree::new_from_buffer(buf.as_mut_slice());
         b.iter(|| {
             for v in 0..20000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -232,11 +224,10 @@ mod bench_tests {
             prepare_memories_for_multi_arena(4, (MAX_SIZE / 4).next_power_of_two());
         let mut arena_slices: Vec<&mut [u8]> =
             arena_bufs.iter_mut().map(|a| a.as_mut_slice()).collect();
-        let mut m = RBTreeMultiArena::load_from_buffers(
+        let mut m = RBTreeMultiArena::new_from_buffers(
             superblock_buf.as_mut_slice(),
             arena_slices.as_mut_slice(),
         );
-        m.initialize();
         b.iter(|| {
             for v in 0..20000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -248,8 +239,7 @@ mod bench_tests {
     fn bench_sokoban_hash_map_insert_20000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; SHashMap::size_of_buffer()];
-        let mut m = SHashMap::load_from_buffer(buf.as_mut_slice());
-        m.initialize();
+        let mut m = SHashMap::new_from_buffer(buf.as_mut_slice());
         b.iter(|| {
             for v in 0..20000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -273,8 +263,7 @@ mod bench_tests {
     fn bench_sokoban_avl_tree_insert_20000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; AVLTreeMap::size_of_buffer()];
-        let mut m = AVLTreeMap::load_from_buffer(buf.as_mut_slice());
-        m.initialize();
+        let mut m = AVLTreeMap::new_from_buffer(buf.as_mut_slice());
         b.iter(|| {
             for v in 0..20000 {
                 m.insert(v as u128, rng.gen::<u128>());
@@ -318,8 +307,7 @@ mod bench_tests {
     fn bench_sokoban_red_black_tree_remove_1000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; RBTree::size_of_buffer()];
-        let mut m = RBTree::load_from_buffer(buf.as_mut_slice());
-        m.initialize();
+        let mut m = RBTree::new_from_buffer(buf.as_mut_slice());
         let mut slice: Vec<u128> = (0..1000).collect();
         slice.shuffle(&mut rng);
         for v in 0..1000 {
@@ -339,11 +327,10 @@ mod bench_tests {
             prepare_memories_for_multi_arena(4, (MAX_SIZE / 4).next_power_of_two());
         let mut arena_slices: Vec<&mut [u8]> =
             arena_bufs.iter_mut().map(|a| a.as_mut_slice()).collect();
-        let mut m = RBTreeMultiArena::load_from_buffers(
+        let mut m = RBTreeMultiArena::new_from_buffers(
             superblock_buf.as_mut_slice(),
             arena_slices.as_mut_slice(),
         );
-        m.initialize();
         let mut slice: Vec<u128> = (0..1000).collect();
         slice.shuffle(&mut rng);
         for v in 0..1000 {
@@ -360,8 +347,7 @@ mod bench_tests {
     fn bench_sokoban_hash_map_remove_1000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; SHashMap::size_of_buffer()];
-        let mut m = SHashMap::load_from_buffer(buf.as_mut_slice());
-        m.initialize();
+        let mut m = SHashMap::new_from_buffer(buf.as_mut_slice());
         let mut slice: Vec<u128> = (0..1000).collect();
         slice.shuffle(&mut rng);
         for v in 0..1000 {
@@ -395,8 +381,7 @@ mod bench_tests {
     fn bench_sokoban_avl_tree_remove_1000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; AVLTreeMap::size_of_buffer()];
-        let mut m = AVLTreeMap::load_from_buffer(buf.as_mut_slice());
-        m.initialize();
+        let mut m = AVLTreeMap::new_from_buffer(buf.as_mut_slice());
         let mut slice: Vec<u128> = (0..1000).collect();
         slice.shuffle(&mut rng);
         for v in 0..1000 {
@@ -441,8 +426,7 @@ mod bench_tests {
     fn bench_sokoban_red_black_tree_lookup_20000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; RBTree::size_of_buffer()];
-        let mut m = RBTree::load_from_buffer(buf.as_mut_slice());
-        m.initialize();
+        let mut m = RBTree::new_from_buffer(buf.as_mut_slice());
         for v in 0..20000 {
             m.insert(v as u128, rng.gen::<u128>());
         }
@@ -460,11 +444,10 @@ mod bench_tests {
             prepare_memories_for_multi_arena(4, (MAX_SIZE / 4).next_power_of_two());
         let mut arena_slices: Vec<&mut [u8]> =
             arena_bufs.iter_mut().map(|a| a.as_mut_slice()).collect();
-        let mut m = RBTreeMultiArena::load_from_buffers(
+        let mut m = RBTreeMultiArena::new_from_buffers(
             superblock_buf.as_mut_slice(),
             arena_slices.as_mut_slice(),
         );
-        m.initialize();
         for v in 0..20000 {
             m.insert(v as u128, rng.gen::<u128>());
         }
@@ -479,8 +462,7 @@ mod bench_tests {
     fn bench_sokoban_hash_map_lookup_20000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; SHashMap::size_of_buffer()];
-        let mut m = SHashMap::load_from_buffer(buf.as_mut_slice());
-        m.initialize();
+        let mut m = SHashMap::new_from_buffer(buf.as_mut_slice());
         for v in 0..20000 {
             m.insert(v as u128, rng.gen::<u128>());
         }
@@ -510,8 +492,7 @@ mod bench_tests {
     fn bench_sokoban_avl_tree_lookup_20000_u128(b: &mut Bencher) {
         let mut rng = rand::thread_rng();
         let mut buf = vec![0u8; AVLTreeMap::size_of_buffer()];
-        let mut m = AVLTreeMap::load_from_buffer(buf.as_mut_slice());
-        m.initialize();
+        let mut m = AVLTreeMap::new_from_buffer(buf.as_mut_slice());
         for v in 0..20000 {
             m.insert(v as u128, rng.gen::<u128>());
         }
