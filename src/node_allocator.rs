@@ -1,6 +1,7 @@
+use alloc::boxed::Box;
 use bytemuck::{Pod, Zeroable};
+use core::mem::{align_of, size_of};
 use num_derive::FromPrimitive;
-use std::mem::{align_of, size_of};
 
 /// Enum representing the fields of a tree node:
 /// 0 - left pointer
@@ -58,12 +59,12 @@ pub trait OrderedNodeAllocatorMap<K, V>: NodeAllocatorMap<K, V> {
 
 pub trait ZeroCopy: Pod {
     fn load_mut_bytes(data: &'_ mut [u8]) -> Option<&'_ mut Self> {
-        let size = std::mem::size_of::<Self>();
+        let size = core::mem::size_of::<Self>();
         bytemuck::try_from_bytes_mut(&mut data[..size]).ok()
     }
 
     fn load_bytes(data: &'_ [u8]) -> Option<&'_ Self> {
-        let size = std::mem::size_of::<Self>();
+        let size = core::mem::size_of::<Self>();
         bytemuck::try_from_bytes(&data[..size]).ok()
     }
 }
@@ -95,37 +96,37 @@ impl<T: Copy + Clone + Pod + Zeroable + Default, const NUM_REGISTERS: usize>
     Node<T, NUM_REGISTERS>
 {
     #[inline(always)]
-    pub(crate) fn get_free_list_register(&self) -> u32 {
+    pub(crate) const fn get_free_list_register(&self) -> u32 {
         self.registers[0]
     }
 
     #[inline(always)]
-    pub fn get_register(&self, r: usize) -> u32 {
+    pub const fn get_register(&self, r: usize) -> u32 {
         self.registers[r]
     }
 
     #[inline(always)]
-    pub(crate) fn set_free_list_register(&mut self, v: u32) {
+    pub(crate) const fn set_free_list_register(&mut self, v: u32) {
         self.registers[0] = v;
     }
 
     #[inline(always)]
-    pub fn set_register(&mut self, r: usize, v: u32) {
+    pub const fn set_register(&mut self, r: usize, v: u32) {
         self.registers[r] = v;
     }
 
     #[inline(always)]
-    pub fn set_value(&mut self, v: T) {
+    pub const fn set_value(&mut self, v: T) {
         self.value = v;
     }
 
     #[inline(always)]
-    pub fn get_value_mut(&mut self) -> &mut T {
+    pub const fn get_value_mut(&mut self) -> &mut T {
         &mut self.value
     }
 
     #[inline(always)]
-    pub fn get_value(&self) -> &T {
+    pub const fn get_value(&self) -> &T {
         &self.value
     }
 }
@@ -207,20 +208,20 @@ impl<
     #[inline(always)]
     fn assert_proper_alignemnt(&self) {
         let reg_size = size_of::<u32>() * NUM_REGISTERS;
-        let self_ptr = std::slice::from_ref(self).as_ptr() as usize;
-        let node_ptr = std::slice::from_ref(&self.nodes).as_ptr() as usize;
+        let self_ptr = alloc::slice::from_ref(self).as_ptr() as usize;
+        let node_ptr = alloc::slice::from_ref(&self.nodes).as_ptr() as usize;
         let self_align = align_of::<Self>();
         let t_index = node_ptr + reg_size;
         let t_align = align_of::<T>();
         let t_size = size_of::<T>();
         assert!(
-            self_ptr % self_align as usize == 0,
+            self_ptr.is_multiple_of(self_align),
             "NodeAllocator alignment mismatch, address is {} which is not a multiple of the struct alignment ({})",
             self_ptr,
             self_align,
         );
         assert!(
-            t_size % t_align == 0,
+            t_size.is_multiple_of(t_align),
             "Size of T ({}) is not a multiple of the alignment of T ({})",
             t_size,
             t_align,
@@ -232,9 +233,12 @@ impl<
             self_align,
         );
         assert!(node_ptr == self_ptr + 16, "Nodes are misaligned");
-        assert!(t_index % t_align == 0, "First index of T is misaligned");
         assert!(
-            (t_index + t_size + reg_size) % t_align == 0,
+            t_index.is_multiple_of(t_align),
+            "First index of T is misaligned"
+        );
+        assert!(
+            (t_index + t_size + reg_size).is_multiple_of(t_align),
             "Subsequent indices of T are misaligned"
         );
     }
@@ -251,12 +255,12 @@ impl<
     }
 
     #[inline(always)]
-    pub fn get(&self, i: u32) -> &Node<T, NUM_REGISTERS> {
+    pub const fn get(&self, i: u32) -> &Node<T, NUM_REGISTERS> {
         &self.nodes[(i - 1) as usize]
     }
 
     #[inline(always)]
-    pub fn get_mut(&mut self, i: u32) -> &mut Node<T, NUM_REGISTERS> {
+    pub const fn get_mut(&mut self, i: u32) -> &mut Node<T, NUM_REGISTERS> {
         &mut self.nodes[(i - 1) as usize]
     }
 
@@ -281,7 +285,7 @@ impl<
 
     /// Removes the node at index `i` from the allocator and adds the index to the free list
     /// When deleting nodes, you MUST clear all registers prior to calling `remove_node`
-    pub fn remove_node(&mut self, i: u32) -> Option<&T> {
+    pub const fn remove_node(&mut self, i: u32) -> Option<&T> {
         if i == SENTINEL {
             return None;
         }
@@ -293,7 +297,7 @@ impl<
     }
 
     #[inline(always)]
-    pub fn disconnect(&mut self, i: u32, j: u32, r_i: u32, r_j: u32) {
+    pub const fn disconnect(&mut self, i: u32, j: u32, r_i: u32, r_j: u32) {
         if i != SENTINEL {
             // assert!(j == self.get_register(i, r_i), "Nodes are not connected");
             self.clear_register(i, r_i);
@@ -305,14 +309,14 @@ impl<
     }
 
     #[inline(always)]
-    pub fn clear_register(&mut self, i: u32, r_i: u32) {
+    pub const fn clear_register(&mut self, i: u32, r_i: u32) {
         if i != SENTINEL {
             self.get_mut(i).set_register(r_i as usize, SENTINEL);
         }
     }
 
     #[inline(always)]
-    pub fn connect(&mut self, i: u32, j: u32, r_i: u32, r_j: u32) {
+    pub const fn connect(&mut self, i: u32, j: u32, r_i: u32, r_j: u32) {
         if i != SENTINEL {
             self.get_mut(i).set_register(r_i as usize, j);
         }
@@ -322,14 +326,14 @@ impl<
     }
 
     #[inline(always)]
-    pub fn set_register(&mut self, i: u32, value: u32, r_i: u32) {
+    pub const fn set_register(&mut self, i: u32, value: u32, r_i: u32) {
         if i != SENTINEL {
             self.get_mut(i).set_register(r_i as usize, value);
         }
     }
 
     #[inline(always)]
-    pub fn get_register(&self, i: u32, r_i: u32) -> u32 {
+    pub const fn get_register(&self, i: u32, r_i: u32) -> u32 {
         if i != SENTINEL {
             self.get(i).get_register(r_i as usize)
         } else {

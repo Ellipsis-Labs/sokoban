@@ -1,11 +1,11 @@
 use arbitrary::Arbitrary;
+use core::{cmp::PartialEq, fmt::Debug};
 use rand::thread_rng;
 use rand::Rng;
 use sokoban::NodeAllocatorMap;
-use std::fmt::Debug;
 
 #[derive(Debug, Arbitrary, Clone, Copy)]
-pub enum NodeAllocatorMapAction<K: Copy, V: std::fmt::Debug + std::cmp::PartialEq + Copy> {
+pub enum NodeAllocatorMapAction<K: Copy, V: Debug + PartialEq + Copy> {
     Insert { key: K, value: V },
     Upsert { value: V },
     Remove,
@@ -16,7 +16,7 @@ pub enum NodeAllocatorMapAction<K: Copy, V: std::fmt::Debug + std::cmp::PartialE
     IterMutRev,
 }
 
-pub fn perform_action<K: Copy, V: std::fmt::Debug + std::cmp::PartialEq + Copy>(
+pub fn perform_action<K: Copy, V: Debug + PartialEq + Copy>(
     tree: &mut dyn NodeAllocatorMap<K, V>,
     keys: &mut Vec<K>,
     action: NodeAllocatorMapAction<K, V>,

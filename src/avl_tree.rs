@@ -1,5 +1,6 @@
+use alloc::{boxed::Box, vec, vec::Vec};
 use bytemuck::{Pod, Zeroable};
-use std::{
+use core::{
     cmp::max,
     ops::{Index, IndexMut},
 };
@@ -56,7 +57,7 @@ impl<
         V: Default + Copy + Clone + Pod + Zeroable,
     > AVLNode<K, V>
 {
-    pub fn new(key: K, value: V) -> Self {
+    pub const fn new(key: K, value: V) -> Self {
         Self { key, value }
     }
 }
@@ -252,11 +253,11 @@ impl<
         self.allocator.initialize()
     }
 
-    pub fn get_node(&self, node: u32) -> &AVLNode<K, V> {
+    pub const fn get_node(&self, node: u32) -> &AVLNode<K, V> {
         self.allocator.get(node).get_value()
     }
 
-    pub fn get_node_mut(&mut self, node: u32) -> &mut AVLNode<K, V> {
+    pub const fn get_node_mut(&mut self, node: u32) -> &mut AVLNode<K, V> {
         self.allocator.get_mut(node).get_value_mut()
     }
 
@@ -272,7 +273,7 @@ impl<
     }
 
     #[inline(always)]
-    fn get_field(&self, node: u32, register: Field) -> u32 {
+    const fn get_field(&self, node: u32, register: Field) -> u32 {
         self.allocator.get_register(node, register as u32)
     }
 
@@ -427,7 +428,7 @@ impl<
         Some(value)
     }
 
-    fn balance_factor(&self, left: u32, right: u32) -> i32 {
+    const fn balance_factor(&self, left: u32, right: u32) -> i32 {
         // safe to convert to i32 since height will be at most log2(capacity)
         let left_height = if left != SENTINEL {
             self.get_field(left, Field::Height) as i32 + 1
@@ -487,7 +488,7 @@ impl<
         self.set_field(index, Field::Height, height);
     }
 
-    fn delete(&mut self, node: u32) {
+    const fn delete(&mut self, node: u32) {
         self.allocator.clear_register(node, Field::Left as u32);
         self.allocator.clear_register(node, Field::Right as u32);
         self.allocator.clear_register(node, Field::Height as u32);
@@ -559,7 +560,7 @@ impl<
         }
     }
 
-    pub fn find_min_index(&self) -> u32 {
+    pub const fn find_min_index(&self) -> u32 {
         if self.root as u32 == SENTINEL {
             return SENTINEL;
         }
@@ -570,7 +571,7 @@ impl<
         node
     }
 
-    pub fn find_max_index(&self) -> u32 {
+    pub const fn find_max_index(&self) -> u32 {
         if self.root as u32 == SENTINEL {
             return SENTINEL;
         }
@@ -581,7 +582,7 @@ impl<
         node
     }
 
-    pub fn find_min(&self) -> Option<&V> {
+    pub const fn find_min(&self) -> Option<&V> {
         let node = self.find_min_index();
         if node == SENTINEL {
             None
@@ -590,7 +591,7 @@ impl<
         }
     }
 
-    pub fn find_max(&self) -> Option<&V> {
+    pub const fn find_max(&self) -> Option<&V> {
         let node = self.find_max_index();
         if node == SENTINEL {
             None
@@ -599,7 +600,7 @@ impl<
         }
     }
 
-    fn _iter(&self) -> AVLTreeIterator<'_, K, V, MAX_SIZE> {
+    const fn _iter(&self) -> AVLTreeIterator<'_, K, V, MAX_SIZE> {
         AVLTreeIterator::<K, V, MAX_SIZE> {
             tree: self,
             fwd_stack: vec![],
@@ -612,7 +613,7 @@ impl<
         }
     }
 
-    fn _iter_mut(&mut self) -> AVLTreeIteratorMut<'_, K, V, MAX_SIZE> {
+    const fn _iter_mut(&mut self) -> AVLTreeIteratorMut<'_, K, V, MAX_SIZE> {
         let node = self.root as u32;
         AVLTreeIteratorMut::<K, V, MAX_SIZE> {
             tree: self,
@@ -702,11 +703,10 @@ impl<
 }
 
 impl<
-        'a,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
-    > DoubleEndedIterator for AVLTreeIterator<'a, K, V, MAX_SIZE>
+    > DoubleEndedIterator for AVLTreeIterator<'_, K, V, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         while !self.terminated && (!self.rev_stack.is_empty() || self.rev_ptr != SENTINEL) {
@@ -786,11 +786,10 @@ impl<
 }
 
 impl<
-        'a,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
-    > DoubleEndedIterator for AVLTreeIteratorMut<'a, K, V, MAX_SIZE>
+    > DoubleEndedIterator for AVLTreeIteratorMut<'_, K, V, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         while !self.terminated && (!self.rev_stack.is_empty() || self.rev_ptr != SENTINEL) {
