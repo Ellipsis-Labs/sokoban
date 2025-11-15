@@ -15,8 +15,7 @@ use sokoban::*;
 
 extern crate alloc;
 
-const MAX_SIZE: usize = 10;
-// const MAX_SIZE: usize = 20000;
+const MAX_SIZE: usize = 20000;
 
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
