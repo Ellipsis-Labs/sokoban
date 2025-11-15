@@ -21,13 +21,17 @@ crate-type = ["lib"]
 required-features = []
 
 [dependencies]
-bytemuck = "1.13.0"
-thiserror = "1.0.38"
-num-derive = "0.3.3"
+thiserror = { version = "2.0.17", default-features = false }
+bytemuck = "1.24.0"
+num-derive = "0.4.2"
 num-traits = "0.2.15"
+libc-print = "0.1.23"
+hashbrown = { version = "0.16.0", default-features = false, features = [
+    "default-hasher",
+] }
 
 [dev-dependencies]
 rand_distr = "0.4.3"
-itertools = "0.10.3"
+itertools = "0.14.0"
 rand = "0.7"
-tokio = { version = "1.8.4", features = ["full"] }
+tokio = { version = "1.48.0", features = ["full"] }

@@ -1,13 +1,13 @@
 use crate::node_allocator::{
     FromSlice, NodeAllocator, NodeAllocatorMap, NodeField, ZeroCopy, SENTINEL,
 };
+use alloc::boxed::Box;
 use bytemuck::{Pod, Zeroable};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hasher;
-use std::{
-    hash::Hash,
+use core::{
+    hash::{BuildHasher, Hash},
     ops::{Index, IndexMut},
 };
+use hashbrown::DefaultHashBuilder;
 
 #[repr(C)]
 #[derive(Default, Copy, Clone)]
@@ -116,9 +116,7 @@ impl<
     }
 
     fn get(&self, key: &K) -> Option<&V> {
-        let mut hasher = DefaultHasher::new();
-        key.hash(&mut hasher);
-        let bucket_index = hasher.finish() as usize % NUM_BUCKETS;
+        let bucket_index = DefaultHashBuilder::default().hash_one(key) as usize % NUM_BUCKETS;
         let mut curr_node = self.buckets[bucket_index];
         while curr_node != SENTINEL {
             let node = self.get_node(curr_node);
@@ -132,9 +130,7 @@ impl<
     }
 
     fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        let mut hasher = DefaultHasher::new();
-        key.hash(&mut hasher);
-        let bucket_index = hasher.finish() as usize % NUM_BUCKETS;
+        let bucket_index = DefaultHashBuilder::default().hash_one(key) as usize % NUM_BUCKETS;
         let head = self.buckets[bucket_index];
         let mut curr_node = head;
         while curr_node != SENTINEL {
@@ -240,9 +236,7 @@ impl<
     }
 
     fn _insert(&mut self, key: K, value: V) -> Option<u32> {
-        let mut hasher = DefaultHasher::new();
-        key.hash(&mut hasher);
-        let bucket_index = hasher.finish() as usize % NUM_BUCKETS;
+        let bucket_index = DefaultHashBuilder::default().hash_one(key) as usize % NUM_BUCKETS;
         let head = self.buckets[bucket_index];
         let mut curr_node = head;
         while curr_node != SENTINEL {
@@ -271,9 +265,7 @@ impl<
     }
 
     pub fn _remove(&mut self, key: &K) -> Option<V> {
-        let mut hasher = DefaultHasher::new();
-        key.hash(&mut hasher);
-        let bucket_index = hasher.finish() as usize % NUM_BUCKETS;
+        let bucket_index = DefaultHashBuilder::default().hash_one(key) as usize % NUM_BUCKETS;
         let head = self.buckets[bucket_index];
         let mut curr_node = self.buckets[bucket_index];
         while curr_node != SENTINEL {
@@ -302,9 +294,7 @@ impl<
     }
 
     pub fn contains(&self, key: &K) -> bool {
-        let mut hasher = DefaultHasher::new();
-        key.hash(&mut hasher);
-        let bucket_index = hasher.finish() as usize % NUM_BUCKETS;
+        let bucket_index = DefaultHashBuilder::default().hash_one(key) as usize % NUM_BUCKETS;
         let mut curr_node = self.buckets[bucket_index];
         while curr_node != SENTINEL {
             let node = self.get_node(curr_node);
@@ -318,9 +308,7 @@ impl<
     }
 
     pub fn get_addr(&self, key: &K) -> u32 {
-        let mut hasher = DefaultHasher::new();
-        key.hash(&mut hasher);
-        let bucket_index = hasher.finish() as usize % NUM_BUCKETS;
+        let bucket_index = DefaultHashBuilder::default().hash_one(key) as usize % NUM_BUCKETS;
         let mut curr_node = self.buckets[bucket_index];
         while curr_node != SENTINEL {
             let node = self.get_node(curr_node);
@@ -425,12 +413,11 @@ impl<
 }
 
 impl<
-        'a,
         K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const NUM_BUCKETS: usize,
         const MAX_SIZE: usize,
-    > DoubleEndedIterator for HashTableIterator<'a, K, V, NUM_BUCKETS, MAX_SIZE>
+    > DoubleEndedIterator for HashTableIterator<'_, K, V, NUM_BUCKETS, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         None
@@ -484,12 +471,11 @@ impl<
 }
 
 impl<
-        'a,
         K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const NUM_BUCKETS: usize,
         const MAX_SIZE: usize,
-    > DoubleEndedIterator for HashTableIteratorMut<'a, K, V, NUM_BUCKETS, MAX_SIZE>
+    > DoubleEndedIterator for HashTableIteratorMut<'_, K, V, NUM_BUCKETS, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         None

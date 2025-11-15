@@ -1,3 +1,6 @@
+#![no_std]
+extern crate alloc;
+
 pub mod avl_tree;
 pub mod critbit;
 pub mod deque;

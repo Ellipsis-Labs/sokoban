@@ -137,8 +137,8 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
             let right = self.get_next(i);
             (left, right, value)
         };
-        self.allocator.clear_register(i as u32, PREV);
-        self.allocator.clear_register(i as u32, NEXT);
+        self.allocator.clear_register(i, PREV);
+        self.allocator.clear_register(i, NEXT);
         if left != SENTINEL && right != SENTINEL {
             self.allocator.connect(left, right, NEXT, PREV);
         }
@@ -150,7 +150,7 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
             self.tail = left;
             self.allocator.clear_register(left, NEXT);
         }
-        self.allocator.remove_node(i as u32);
+        self.allocator.remove_node(i);
         self.sequence_number += 1;
         Some(value)
     }
@@ -214,8 +214,8 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iter
     }
 }
 
-impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> DoubleEndedIterator
-    for DequeIterator<'a, T, MAX_SIZE>
+impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> DoubleEndedIterator
+    for DequeIterator<'_, T, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.terminated {
@@ -273,8 +273,8 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Iter
     }
 }
 
-impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> DoubleEndedIterator
-    for DequeIteratorMut<'a, T, MAX_SIZE>
+impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> DoubleEndedIterator
+    for DequeIteratorMut<'_, T, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.terminated {
@@ -302,100 +302,107 @@ impl<'a, T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Doub
     }
 }
 
-#[test]
-/// This test covers the primary use cases of the deque
-fn test_deque() {
-    use rand::thread_rng;
-    use rand::Rng;
-    use std::collections::VecDeque;
-    let mut rng = thread_rng();
-    type Q = Deque<u64, 1024>;
-    let mut buf = vec![0u8; std::mem::size_of::<Q>()];
-    let mut v = VecDeque::new();
-    let q = Q::new_from_slice(buf.as_mut_slice());
-    (0..128).for_each(|_| {
-        let t = rng.gen::<u64>();
-        q.push_back(t);
-        v.push_back(t);
-    });
-    (0..128).for_each(|_| {
-        let t = rng.gen::<u64>();
-        q.push_front(t);
-        v.push_front(t);
-    });
-    for ((_, i), j) in q.iter().zip(v.iter()) {
-        assert_eq!(i, j);
-    }
-    for ((_, i), j) in q.iter().rev().zip(v.iter().rev()) {
-        assert_eq!(i, j);
-    }
+#[cfg(test)]
+mod test {
+    use alloc::vec;
 
-    {
-        let mut q_iter = q.iter();
-        let mut v_iter = v.iter();
-        let breakpoint = rng.gen_range(1, 255);
-        for _ in 0..breakpoint {
-            assert_eq!(q_iter.next().map(|x| x.1), v_iter.next());
+    use super::*;
+
+    #[test]
+    /// This test covers the primary use cases of the deque
+    fn test_deque() {
+        use alloc::collections::VecDeque;
+        use rand::thread_rng;
+        use rand::Rng;
+        let mut rng = thread_rng();
+        type Q = Deque<u64, 1024>;
+        let mut buf = vec![0u8; core::mem::size_of::<Q>()];
+        let mut v = VecDeque::new();
+        let q = Q::new_from_slice(buf.as_mut_slice());
+        (0..128).for_each(|_| {
+            let t = rng.gen::<u64>();
+            q.push_back(t);
+            v.push_back(t);
+        });
+        (0..128).for_each(|_| {
+            let t = rng.gen::<u64>();
+            q.push_front(t);
+            v.push_front(t);
+        });
+        for ((_, i), j) in q.iter().zip(v.iter()) {
+            assert_eq!(i, j);
         }
-        for _ in breakpoint..256 {
-            assert_eq!(q_iter.next_back().map(|x| x.1), v_iter.next_back());
+        for ((_, i), j) in q.iter().rev().zip(v.iter().rev()) {
+            assert_eq!(i, j);
         }
 
-        assert!(q_iter.next().is_none());
-        assert!(q_iter.next_back().is_none());
-        assert!(v_iter.next().is_none());
-        assert!(v_iter.next_back().is_none());
-        // Do it again for good measure
-        assert!(q_iter.next().is_none());
-        assert!(q_iter.next_back().is_none());
-        assert!(v_iter.next().is_none());
-        assert!(v_iter.next_back().is_none());
-    }
+        {
+            let mut q_iter = q.iter();
+            let mut v_iter = v.iter();
+            let breakpoint = rng.gen_range(1, 255);
+            for _ in 0..breakpoint {
+                assert_eq!(q_iter.next().map(|x| x.1), v_iter.next());
+            }
+            for _ in breakpoint..256 {
+                assert_eq!(q_iter.next_back().map(|x| x.1), v_iter.next_back());
+            }
 
-    {
-        let mut q_iter_mut = q.iter_mut();
-        let mut v_iter_mut = v.iter_mut();
-        let breakpoint = rng.gen_range(1, 255);
-        for _ in 0..breakpoint {
-            assert_eq!(q_iter_mut.next().map(|x| x.1), v_iter_mut.next());
+            assert!(q_iter.next().is_none());
+            assert!(q_iter.next_back().is_none());
+            assert!(v_iter.next().is_none());
+            assert!(v_iter.next_back().is_none());
+            // Do it again for good measure
+            assert!(q_iter.next().is_none());
+            assert!(q_iter.next_back().is_none());
+            assert!(v_iter.next().is_none());
+            assert!(v_iter.next_back().is_none());
         }
-        for _ in breakpoint..256 {
-            assert_eq!(q_iter_mut.next_back().map(|x| x.1), v_iter_mut.next_back());
+
+        {
+            let mut q_iter_mut = q.iter_mut();
+            let mut v_iter_mut = v.iter_mut();
+            let breakpoint = rng.gen_range(1, 255);
+            for _ in 0..breakpoint {
+                assert_eq!(q_iter_mut.next().map(|x| x.1), v_iter_mut.next());
+            }
+            for _ in breakpoint..256 {
+                assert_eq!(q_iter_mut.next_back().map(|x| x.1), v_iter_mut.next_back());
+            }
+
+            assert!(q_iter_mut.next().is_none());
+            assert!(q_iter_mut.next_back().is_none());
+            assert!(v_iter_mut.next().is_none());
+            assert!(v_iter_mut.next_back().is_none());
+            // Do it again for good measure
+            assert!(q_iter_mut.next().is_none());
+            assert!(q_iter_mut.next_back().is_none());
+            assert!(v_iter_mut.next().is_none());
+            assert!(v_iter_mut.next_back().is_none());
         }
 
-        assert!(q_iter_mut.next().is_none());
-        assert!(q_iter_mut.next_back().is_none());
-        assert!(v_iter_mut.next().is_none());
-        assert!(v_iter_mut.next_back().is_none());
-        // Do it again for good measure
-        assert!(q_iter_mut.next().is_none());
-        assert!(q_iter_mut.next_back().is_none());
-        assert!(v_iter_mut.next().is_none());
-        assert!(v_iter_mut.next_back().is_none());
+        (0..256).for_each(|_| {
+            assert_eq!(q.pop_back(), v.pop_back());
+        });
+        assert!(q.is_empty() && v.is_empty());
+        (0..128).for_each(|_| {
+            let t = rng.gen::<u64>();
+            q.push_back(t);
+            v.push_back(t);
+        });
+        (0..128).for_each(|_| {
+            let t = rng.gen::<u64>();
+            q.push_front(t);
+            v.push_front(t);
+        });
+        for ((_, i), j) in q.iter().zip(v.iter()) {
+            assert_eq!(i, j);
+        }
+        for ((_, i), j) in q.iter().rev().zip(v.iter().rev()) {
+            assert_eq!(i, j);
+        }
+        (0..256).for_each(|_| {
+            assert_eq!(q.pop_front(), v.pop_front());
+        });
+        assert!(q.is_empty() && v.is_empty());
     }
-
-    (0..256).for_each(|_| {
-        assert_eq!(q.pop_back(), v.pop_back());
-    });
-    assert!(q.is_empty() && v.is_empty());
-    (0..128).for_each(|_| {
-        let t = rng.gen::<u64>();
-        q.push_back(t);
-        v.push_back(t);
-    });
-    (0..128).for_each(|_| {
-        let t = rng.gen::<u64>();
-        q.push_front(t);
-        v.push_front(t);
-    });
-    for ((_, i), j) in q.iter().zip(v.iter()) {
-        assert_eq!(i, j);
-    }
-    for ((_, i), j) in q.iter().rev().zip(v.iter().rev()) {
-        assert_eq!(i, j);
-    }
-    (0..256).for_each(|_| {
-        assert_eq!(q.pop_front(), v.pop_front());
-    });
-    assert!(q.is_empty() && v.is_empty());
 }

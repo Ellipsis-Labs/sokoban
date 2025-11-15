@@ -1,5 +1,6 @@
+use alloc::{boxed::Box, vec, vec::Vec};
 use bytemuck::{Pod, Zeroable};
-use std::ops::{Index, IndexMut};
+use core::ops::{Index, IndexMut};
 
 use crate::node_allocator::{
     FromSlice, NodeAllocator, NodeAllocatorMap, OrderedNodeAllocatorMap, TreeField as Field,
@@ -130,7 +131,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
         if self.is_empty() {
             return None;
         }
-        let mut node_index = self.root as u32;
+        let mut node_index = self.root;
         loop {
             let node = self.get_node(node_index);
             if !self.is_inner_node(node_index) {
@@ -176,11 +177,11 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     OrderedNodeAllocatorMap<u128, V> for Critbit<V, NUM_NODES, MAX_SIZE>
 {
     fn get_min_index(&mut self) -> u32 {
-        self.find_min(self.root as u32)
+        self.find_min(self.root)
     }
 
     fn get_max_index(&mut self) -> u32 {
-        self.find_max(self.root as u32)
+        self.find_max(self.root)
     }
 
     fn get_min(&mut self) -> Option<(u128, V)> {
@@ -384,7 +385,7 @@ impl<V: Default + Copy + Clone + Pod + Zeroable, const NUM_NODES: usize, const M
     }
 
     pub fn get_addr(&self, key: u128) -> u32 {
-        let mut node_index = self.root as u32;
+        let mut node_index = self.root;
         loop {
             let node = self.get_node(node_index);
             if !self.is_inner_node(node_index) {
@@ -635,12 +636,8 @@ impl<
     }
 }
 
-impl<
-        'a,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_NODES: usize,
-        const MAX_SIZE: usize,
-    > DoubleEndedIterator for CritbitIterator<'a, V, MAX_NODES, MAX_SIZE>
+impl<V: Default + Copy + Clone + Pod + Zeroable, const MAX_NODES: usize, const MAX_SIZE: usize>
+    DoubleEndedIterator for CritbitIterator<'_, V, MAX_NODES, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         while !self.terminated && !self.rev_stack.is_empty() {
@@ -729,12 +726,8 @@ impl<
     }
 }
 
-impl<
-        'a,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const MAX_NODES: usize,
-        const MAX_SIZE: usize,
-    > DoubleEndedIterator for CritbitIteratorMut<'a, V, MAX_NODES, MAX_SIZE>
+impl<V: Default + Copy + Clone + Pod + Zeroable, const MAX_NODES: usize, const MAX_SIZE: usize>
+    DoubleEndedIterator for CritbitIteratorMut<'_, V, MAX_NODES, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         while !self.terminated && !self.rev_stack.is_empty() {

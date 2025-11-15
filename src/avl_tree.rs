@@ -1,5 +1,6 @@
+use alloc::{boxed::Box, vec, vec::Vec};
 use bytemuck::{Pod, Zeroable};
-use std::{
+use core::{
     cmp::max,
     ops::{Index, IndexMut},
 };
@@ -702,11 +703,10 @@ impl<
 }
 
 impl<
-        'a,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
-    > DoubleEndedIterator for AVLTreeIterator<'a, K, V, MAX_SIZE>
+    > DoubleEndedIterator for AVLTreeIterator<'_, K, V, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         while !self.terminated && (!self.rev_stack.is_empty() || self.rev_ptr != SENTINEL) {
@@ -786,11 +786,10 @@ impl<
 }
 
 impl<
-        'a,
         K: PartialOrd + Copy + Clone + Default + Pod + Zeroable,
         V: Default + Copy + Clone + Pod + Zeroable,
         const MAX_SIZE: usize,
-    > DoubleEndedIterator for AVLTreeIteratorMut<'a, K, V, MAX_SIZE>
+    > DoubleEndedIterator for AVLTreeIteratorMut<'_, K, V, MAX_SIZE>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         while !self.terminated && (!self.rev_stack.is_empty() || self.rev_ptr != SENTINEL) {

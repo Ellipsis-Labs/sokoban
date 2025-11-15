@@ -1,5 +1,7 @@
+use alloc::collections::BTreeMap;
 use bytemuck::Pod;
 use bytemuck::Zeroable;
+use core::fmt::Debug;
 use itertools::Itertools;
 use rand::distributions::Standard;
 use rand::prelude::Distribution;
@@ -10,7 +12,8 @@ use rand::{self, Rng};
 use sokoban::node_allocator::FromSlice;
 use sokoban::node_allocator::NodeAllocatorMap;
 use sokoban::*;
-use std::collections::BTreeMap;
+
+extern crate alloc;
 
 const MAX_SIZE: usize = 20000;
 
@@ -37,17 +40,17 @@ impl Widget {
     }
 }
 
-fn simulate<K: std::fmt::Debug + Clone + Copy + Zeroable + Pod + Ord, T>(expect_sorted: bool)
+fn simulate<K: Debug + Clone + Copy + Zeroable + Pod + Ord, T>(expect_sorted: bool)
 where
     T: Copy + FromSlice + NodeAllocatorMap<K, Widget>,
     Standard: Distribution<K>,
 {
-    let mut buf = vec![0u8; std::mem::size_of::<T>()];
+    let mut buf = vec![0u8; core::mem::size_of::<T>()];
     let tree = T::new_from_slice(buf.as_mut_slice());
     println!(
         "{} Memory Size: {}, Capacity: {}",
-        std::any::type_name::<T>(),
-        std::mem::size_of::<T>(),
+        core::any::type_name::<T>(),
+        core::mem::size_of::<T>(),
         MAX_SIZE
     );
     let mut rng = thread_rng();
@@ -278,7 +281,7 @@ where
         }
     }
 
-    println!("{} Size: {}", std::any::type_name::<T>(), tree.len(),);
+    println!("{} Size: {}", core::any::type_name::<T>(), tree.len(),);
 }
 
 #[tokio::test(flavor = "multi_thread")]

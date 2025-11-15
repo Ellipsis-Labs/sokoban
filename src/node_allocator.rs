@@ -1,6 +1,7 @@
+use alloc::boxed::Box;
 use bytemuck::{Pod, Zeroable};
+use core::mem::{align_of, size_of};
 use num_derive::FromPrimitive;
-use std::mem::{align_of, size_of};
 
 /// Enum representing the fields of a tree node:
 /// 0 - left pointer
@@ -58,12 +59,12 @@ pub trait OrderedNodeAllocatorMap<K, V>: NodeAllocatorMap<K, V> {
 
 pub trait ZeroCopy: Pod {
     fn load_mut_bytes(data: &'_ mut [u8]) -> Option<&'_ mut Self> {
-        let size = std::mem::size_of::<Self>();
+        let size = core::mem::size_of::<Self>();
         bytemuck::try_from_bytes_mut(&mut data[..size]).ok()
     }
 
     fn load_bytes(data: &'_ [u8]) -> Option<&'_ Self> {
-        let size = std::mem::size_of::<Self>();
+        let size = core::mem::size_of::<Self>();
         bytemuck::try_from_bytes(&data[..size]).ok()
     }
 }
@@ -207,14 +208,14 @@ impl<
     #[inline(always)]
     fn assert_proper_alignemnt(&self) {
         let reg_size = size_of::<u32>() * NUM_REGISTERS;
-        let self_ptr = std::slice::from_ref(self).as_ptr() as usize;
-        let node_ptr = std::slice::from_ref(&self.nodes).as_ptr() as usize;
+        let self_ptr = alloc::slice::from_ref(self).as_ptr() as usize;
+        let node_ptr = alloc::slice::from_ref(&self.nodes).as_ptr() as usize;
         let self_align = align_of::<Self>();
         let t_index = node_ptr + reg_size;
         let t_align = align_of::<T>();
         let t_size = size_of::<T>();
         assert!(
-            self_ptr % self_align as usize == 0,
+            self_ptr % self_align == 0,
             "NodeAllocator alignment mismatch, address is {} which is not a multiple of the struct alignment ({})",
             self_ptr,
             self_align,
