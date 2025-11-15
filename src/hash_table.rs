@@ -114,7 +114,6 @@ impl<
 
     fn contains(&self, key: &K) -> bool {
         self._contains(key)
-        // self.get(key).is_some()
     }
 
     fn get(&self, key: &K) -> Option<&V> {
