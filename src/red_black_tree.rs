@@ -33,7 +33,7 @@ pub enum Color {
 
 /// Exploits the fact that LEFT and RIGHT are set to 0 and 1 respectively
 #[inline(always)]
-fn opposite(dir: u32) -> u32 {
+const fn opposite(dir: u32) -> u32 {
     1 - dir
 }
 
@@ -65,7 +65,7 @@ impl<
         V: Default + Copy + Clone + Pod + Zeroable,
     > RBNode<K, V>
 {
-    pub fn new(key: K, value: V) -> Self {
+    pub const fn new(key: K, value: V) -> Self {
         Self { key, value }
     }
 }
@@ -271,9 +271,10 @@ impl<
 
     fn assert_proper_alignment() {
         // TODO is this a sufficient coverage of the edge cases?
-        assert!(core::mem::size_of::<V>() % core::mem::align_of::<K>() == 0);
-        assert!(core::mem::size_of::<RBNode<K, V>>() % core::mem::align_of::<RBNode<K, V>>() == 0);
-        assert!(core::mem::size_of::<RBNode<K, V>>() % 8_usize == 0);
+        assert!(core::mem::size_of::<V>().is_multiple_of(core::mem::align_of::<K>()));
+        assert!(core::mem::size_of::<RBNode<K, V>>()
+            .is_multiple_of(core::mem::align_of::<RBNode<K, V>>()));
+        assert!(core::mem::size_of::<RBNode<K, V>>().is_multiple_of(8_usize));
     }
 
     pub fn is_valid_red_black_tree(&self) -> bool {
@@ -327,58 +328,58 @@ impl<
         self.allocator.initialize();
     }
 
-    pub fn get_node(&self, node: u32) -> &RBNode<K, V> {
+    pub const fn get_node(&self, node: u32) -> &RBNode<K, V> {
         self.allocator.get(node).get_value()
     }
 
-    pub fn get_node_mut(&mut self, node: u32) -> &mut RBNode<K, V> {
+    pub const fn get_node_mut(&mut self, node: u32) -> &mut RBNode<K, V> {
         self.allocator.get_mut(node).get_value_mut()
     }
 
     #[inline(always)]
-    fn _color_red(&mut self, node: u32) {
+    const fn _color_red(&mut self, node: u32) {
         if node != SENTINEL {
             self.allocator.set_register(node, Color::Red as u32, COLOR);
         }
     }
 
     #[inline(always)]
-    fn _color_black(&mut self, node: u32) {
+    const fn _color_black(&mut self, node: u32) {
         self.allocator
             .set_register(node, Color::Black as u32, COLOR);
     }
 
     #[inline(always)]
-    fn _color_node(&mut self, node: u32, color: u32) {
+    const fn _color_node(&mut self, node: u32, color: u32) {
         self.allocator.set_register(node, color, COLOR);
     }
 
     #[inline(always)]
-    pub fn is_red(&self, node: u32) -> bool {
+    pub const fn is_red(&self, node: u32) -> bool {
         self.allocator.get_register(node, COLOR) == Color::Red as u32
     }
 
     #[inline(always)]
-    pub fn is_black(&self, node: u32) -> bool {
+    pub const fn is_black(&self, node: u32) -> bool {
         self.allocator.get_register(node, COLOR) == Color::Black as u32
     }
 
     #[inline(always)]
-    pub fn get_child(&self, node: u32, dir: u32) -> u32 {
+    pub const fn get_child(&self, node: u32, dir: u32) -> u32 {
         self.allocator.get_register(node, dir)
     }
 
     #[inline(always)]
-    pub fn is_leaf(&self, node: u32) -> bool {
+    pub const fn is_leaf(&self, node: u32) -> bool {
         self.get_left(node) == SENTINEL && self.get_right(node) == SENTINEL
     }
 
     #[inline(always)]
-    pub fn is_root(&self, node: u32) -> bool {
+    pub const fn is_root(&self, node: u32) -> bool {
         self.root == node
     }
 
-    pub fn get_dir(&self, node: u32, dir: u32) -> u32 {
+    pub const fn get_dir(&self, node: u32, dir: u32) -> u32 {
         if dir == Field::Left as u32 {
             self.get_left(node)
         } else {
@@ -387,22 +388,22 @@ impl<
     }
 
     #[inline(always)]
-    pub fn get_left(&self, node: u32) -> u32 {
+    pub const fn get_left(&self, node: u32) -> u32 {
         self.allocator.get_register(node, Field::Left as u32)
     }
 
     #[inline(always)]
-    pub fn get_right(&self, node: u32) -> u32 {
+    pub const fn get_right(&self, node: u32) -> u32 {
         self.allocator.get_register(node, Field::Right as u32)
     }
 
     #[inline(always)]
-    pub fn get_color(&self, node: u32) -> u32 {
+    pub const fn get_color(&self, node: u32) -> u32 {
         self.allocator.get_register(node, COLOR)
     }
 
     #[inline(always)]
-    pub fn get_parent(&self, node: u32) -> u32 {
+    pub const fn get_parent(&self, node: u32) -> u32 {
         self.allocator.get_register(node, Field::Parent as u32)
     }
 
@@ -418,7 +419,7 @@ impl<
         }
     }
 
-    fn _remove_allocator_node(&mut self, node: u32) {
+    const fn _remove_allocator_node(&mut self, node: u32) {
         // Clear all registers
         self.allocator.clear_register(node, Field::Parent as u32);
         self.allocator.clear_register(node, COLOR);
@@ -429,7 +430,7 @@ impl<
     }
 
     #[inline(always)]
-    fn _connect(&mut self, parent: u32, child: u32, dir: u32) {
+    const fn _connect(&mut self, parent: u32, child: u32, dir: u32) {
         self.allocator
             .connect(parent, child, dir, Field::Parent as u32);
     }
@@ -638,7 +639,7 @@ impl<
     }
 
     fn _fix_remove(&mut self, mut node_index: u32, parent_and_dir: Option<(u32, u32)>) {
-        let (mut parent, mut dir) = parent_and_dir.unwrap_or({
+        let (mut parent, mut dir) = parent_and_dir.unwrap_or_else(|| {
             let parent = self.get_parent(node_index);
             let dir = self._child_dir(parent, node_index);
             (parent, dir)
@@ -710,7 +711,7 @@ impl<
         }
     }
 
-    fn _find_min(&self, index: u32) -> u32 {
+    const fn _find_min(&self, index: u32) -> u32 {
         let mut node = index;
         while self.get_left(node) != SENTINEL {
             node = self.get_left(node);
@@ -718,7 +719,7 @@ impl<
         node
     }
 
-    fn _find_max(&self, index: u32) -> u32 {
+    const fn _find_max(&self, index: u32) -> u32 {
         let mut node = index;
         while self.get_right(node) != SENTINEL {
             node = self.get_right(node);
@@ -726,7 +727,7 @@ impl<
         node
     }
 
-    fn _iter(&self) -> RedBlackTreeIterator<'_, K, V, MAX_SIZE> {
+    const fn _iter(&self) -> RedBlackTreeIterator<'_, K, V, MAX_SIZE> {
         RedBlackTreeIterator::<K, V, MAX_SIZE> {
             tree: self,
             fwd_stack: vec![],
@@ -739,7 +740,7 @@ impl<
         }
     }
 
-    fn _iter_mut(&mut self) -> RedBlackTreeIteratorMut<'_, K, V, MAX_SIZE> {
+    const fn _iter_mut(&mut self) -> RedBlackTreeIteratorMut<'_, K, V, MAX_SIZE> {
         let node = self.root;
         RedBlackTreeIteratorMut::<K, V, MAX_SIZE> {
             tree: self,
@@ -987,11 +988,13 @@ mod test {
         type Rbt = RedBlackTree<u64, u64, 1024>;
         let mut buf = vec![0u8; core::mem::size_of::<Rbt>()];
         let tree = Rbt::new_from_slice(buf.as_mut_slice());
-        let addrs = [tree.insert(61, 0).unwrap(),
+        let addrs = [
+            tree.insert(61, 0).unwrap(),
             tree.insert(52, 0).unwrap(),
             tree.insert(85, 0).unwrap(),
             tree.insert(76, 0).unwrap(),
-            tree.insert(93, 0).unwrap()];
+            tree.insert(93, 0).unwrap(),
+        ];
 
         let parent = addrs[4];
         let uncle = addrs[3];
@@ -1034,10 +1037,12 @@ mod test {
         type Rbt = RedBlackTree<u64, u64, 1024>;
         let mut buf = vec![0u8; core::mem::size_of::<Rbt>()];
         let tree = Rbt::new_from_slice(buf.as_mut_slice());
-        let addrs = [tree.insert(61, 0).unwrap(),
+        let addrs = [
+            tree.insert(61, 0).unwrap(),
             tree.insert(52, 0).unwrap(),
             tree.insert(85, 0).unwrap(),
-            tree.insert(93, 0).unwrap()];
+            tree.insert(93, 0).unwrap(),
+        ];
 
         let parent = addrs[3];
         // Uncle is black as it is null
@@ -1085,10 +1090,12 @@ mod test {
         type Rbt = RedBlackTree<u64, u64, 1024>;
         let mut buf = vec![0u8; core::mem::size_of::<Rbt>()];
         let tree = Rbt::new_from_slice(buf.as_mut_slice());
-        let addrs = [tree.insert(61, 0).unwrap(),
+        let addrs = [
+            tree.insert(61, 0).unwrap(),
             tree.insert(52, 0).unwrap(),
             tree.insert(85, 0).unwrap(),
-            tree.insert(93, 0).unwrap()];
+            tree.insert(93, 0).unwrap(),
+        ];
 
         let parent = addrs[3];
         // Uncle is black as it is null
@@ -1136,10 +1143,12 @@ mod test {
         type Rbt = RedBlackTree<u64, u64, 1024>;
         let mut buf = vec![0u8; core::mem::size_of::<Rbt>()];
         let tree = Rbt::new_from_slice(buf.as_mut_slice());
-        let addrs = [tree.insert(61, 0).unwrap(),
+        let addrs = [
+            tree.insert(61, 0).unwrap(),
             tree.insert(85, 0).unwrap(),
             tree.insert(52, 0).unwrap(),
-            tree.insert(41, 0).unwrap()];
+            tree.insert(41, 0).unwrap(),
+        ];
 
         let parent = addrs[3];
         // Uncle is black as it is null
@@ -1187,10 +1196,12 @@ mod test {
         type Rbt = RedBlackTree<u64, u64, 1024>;
         let mut buf = vec![0u8; core::mem::size_of::<Rbt>()];
         let tree = Rbt::new_from_slice(buf.as_mut_slice());
-        let addrs = [tree.insert(61, 0).unwrap(),
+        let addrs = [
+            tree.insert(61, 0).unwrap(),
             tree.insert(85, 0).unwrap(),
             tree.insert(52, 0).unwrap(),
-            tree.insert(41, 0).unwrap()];
+            tree.insert(41, 0).unwrap(),
+        ];
 
         let parent = addrs[3];
         // Uncle is black as it is null

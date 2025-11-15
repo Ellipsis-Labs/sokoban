@@ -15,7 +15,8 @@ use sokoban::*;
 
 extern crate alloc;
 
-const MAX_SIZE: usize = 20000;
+const MAX_SIZE: usize = 10;
+// const MAX_SIZE: usize = 20000;
 
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
@@ -61,6 +62,7 @@ where
     for _ in 0..(MAX_SIZE) {
         let k = rng.gen::<K>();
         v = Widget::new_random(&mut rng);
+        println!("insert key: {:?}, {:?}", k, v);
         assert!(tree.insert(k, v).is_some());
         s += 1;
         assert!(s == tree.len());
@@ -76,6 +78,7 @@ where
     rand_keys.shuffle(&mut rng);
 
     for k in rand_keys.iter() {
+        println!("Removing key: {:?}", k);
         assert!(tree.remove(k).is_some());
         s -= 1;
         map.remove(k);

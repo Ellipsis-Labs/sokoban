@@ -63,30 +63,30 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         self.allocator.initialize();
     }
 
-    pub fn front(&self) -> Option<&T> {
+    pub const fn front(&self) -> Option<&T> {
         if self.head == SENTINEL {
             return None;
         }
         Some(self.get_node(self.head))
     }
 
-    pub fn back(&self) -> Option<&T> {
+    pub const fn back(&self) -> Option<&T> {
         if self.tail == SENTINEL {
             return None;
         }
         Some(self.allocator.get(self.tail).get_value())
     }
 
-    pub fn get_next(&self, index: u32) -> u32 {
+    pub const fn get_next(&self, index: u32) -> u32 {
         self.allocator.get_register(index, NEXT)
     }
 
-    pub fn get_prev(&self, index: u32) -> u32 {
+    pub const fn get_prev(&self, index: u32) -> u32 {
         self.allocator.get_register(index, PREV)
     }
 
     #[inline(always)]
-    fn get_node(&self, i: u32) -> &T {
+    const fn get_node(&self, i: u32) -> &T {
         self.allocator.get(i).get_value()
     }
 
@@ -114,7 +114,7 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         self.sequence_number += 1;
     }
 
-    pub fn pop_front(&mut self) -> Option<T> {
+    pub const fn pop_front(&mut self) -> Option<T> {
         if self.head == SENTINEL {
             return None;
         }
@@ -122,7 +122,7 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         self._remove(head)
     }
 
-    pub fn pop_back(&mut self) -> Option<T> {
+    pub const fn pop_back(&mut self) -> Option<T> {
         if self.tail == SENTINEL {
             return None;
         }
@@ -130,7 +130,7 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         self._remove(tail)
     }
 
-    fn _remove(&mut self, i: u32) -> Option<T> {
+    const fn _remove(&mut self, i: u32) -> Option<T> {
         let (left, right, value) = {
             let value = *self.get_node(i);
             let left = self.get_prev(i);
@@ -155,15 +155,15 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         Some(value)
     }
 
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.allocator.size as usize
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    pub fn iter(&self) -> DequeIterator<'_, T, MAX_SIZE> {
+    pub const fn iter(&self) -> DequeIterator<'_, T, MAX_SIZE> {
         DequeIterator::<T, MAX_SIZE> {
             deque: self,
             fwd_ptr: self.head,
@@ -172,7 +172,7 @@ impl<T: Default + Copy + Clone + Pod + Zeroable, const MAX_SIZE: usize> Deque<T,
         }
     }
 
-    pub fn iter_mut(&mut self) -> DequeIteratorMut<'_, T, MAX_SIZE> {
+    pub const fn iter_mut(&mut self) -> DequeIteratorMut<'_, T, MAX_SIZE> {
         let head = self.head;
         let tail = self.tail;
         DequeIteratorMut::<T, MAX_SIZE> {

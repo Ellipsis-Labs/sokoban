@@ -7,7 +7,7 @@ use core::{
     hash::{BuildHasher, Hash},
     ops::{Index, IndexMut},
 };
-use hashbrown::DefaultHashBuilder;
+use foldhash::fast::FixedState;
 
 #[repr(C)]
 #[derive(Default, Copy, Clone)]
@@ -37,7 +37,7 @@ impl<
         V: Default + Copy + Clone + Pod + Zeroable,
     > HashNode<K, V>
 {
-    pub fn new(key: K, value: V) -> Self {
+    pub const fn new(key: K, value: V) -> Self {
         Self { key, value }
     }
 }
@@ -62,14 +62,6 @@ unsafe impl<
     > Zeroable for HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
 {
 }
-unsafe impl<
-        K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
-        V: Default + Copy + Clone + Pod + Zeroable,
-        const NUM_BUCKETS: usize,
-        const MAX_SIZE: usize,
-    > Pod for HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
-{
-}
 
 impl<
         K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
@@ -77,6 +69,15 @@ impl<
         const NUM_BUCKETS: usize,
         const MAX_SIZE: usize,
     > ZeroCopy for HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
+{
+}
+
+unsafe impl<
+        K: Hash + PartialEq + Copy + Clone + Default + Pod + Zeroable,
+        V: Default + Copy + Clone + Pod + Zeroable,
+        const NUM_BUCKETS: usize,
+        const MAX_SIZE: usize,
+    > Pod for HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
 {
 }
 
@@ -112,11 +113,12 @@ impl<
     }
 
     fn contains(&self, key: &K) -> bool {
-        self.get(key).is_some()
+        self._contains(key)
+        // self.get(key).is_some()
     }
 
     fn get(&self, key: &K) -> Option<&V> {
-        let bucket_index = DefaultHashBuilder::default().hash_one(key) as usize % NUM_BUCKETS;
+        let bucket_index = FixedState::default().hash_one(key) as usize % NUM_BUCKETS;
         let mut curr_node = self.buckets[bucket_index];
         while curr_node != SENTINEL {
             let node = self.get_node(curr_node);
@@ -130,7 +132,7 @@ impl<
     }
 
     fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        let bucket_index = DefaultHashBuilder::default().hash_one(key) as usize % NUM_BUCKETS;
+        let bucket_index = FixedState::default().hash_one(key) as usize % NUM_BUCKETS;
         let head = self.buckets[bucket_index];
         let mut curr_node = head;
         while curr_node != SENTINEL {
@@ -208,7 +210,7 @@ impl<
     > HashTable<K, V, NUM_BUCKETS, MAX_SIZE>
 {
     fn assert_proper_alignment() {
-        assert!(NUM_BUCKETS % 2 == 0);
+        assert!(NUM_BUCKETS.is_multiple_of(2));
     }
 
     pub fn initialize(&mut self) {
@@ -219,24 +221,24 @@ impl<
         Self::default()
     }
 
-    pub fn get_next(&self, index: u32) -> u32 {
+    pub const fn get_next(&self, index: u32) -> u32 {
         self.allocator.get_register(index, NodeField::Right as u32)
     }
 
-    pub fn get_prev(&self, index: u32) -> u32 {
+    pub const fn get_prev(&self, index: u32) -> u32 {
         self.allocator.get_register(index, NodeField::Left as u32)
     }
 
-    pub fn get_node(&self, index: u32) -> &HashNode<K, V> {
+    pub const fn get_node(&self, index: u32) -> &HashNode<K, V> {
         self.allocator.get(index).get_value()
     }
 
-    pub fn get_node_mut(&mut self, index: u32) -> &mut HashNode<K, V> {
+    pub const fn get_node_mut(&mut self, index: u32) -> &mut HashNode<K, V> {
         self.allocator.get_mut(index).get_value_mut()
     }
 
     fn _insert(&mut self, key: K, value: V) -> Option<u32> {
-        let bucket_index = DefaultHashBuilder::default().hash_one(key) as usize % NUM_BUCKETS;
+        let bucket_index = FixedState::default().hash_one(key) as usize % NUM_BUCKETS;
         let head = self.buckets[bucket_index];
         let mut curr_node = head;
         while curr_node != SENTINEL {
@@ -265,9 +267,9 @@ impl<
     }
 
     pub fn _remove(&mut self, key: &K) -> Option<V> {
-        let bucket_index = DefaultHashBuilder::default().hash_one(key) as usize % NUM_BUCKETS;
+        let bucket_index = FixedState::default().hash_one(key) as usize % NUM_BUCKETS;
         let head = self.buckets[bucket_index];
-        let mut curr_node = self.buckets[bucket_index];
+        let mut curr_node = head;
         while curr_node != SENTINEL {
             let node = self.get_node(curr_node);
             if node.key == *key {
@@ -293,8 +295,8 @@ impl<
         None
     }
 
-    pub fn contains(&self, key: &K) -> bool {
-        let bucket_index = DefaultHashBuilder::default().hash_one(key) as usize % NUM_BUCKETS;
+    pub fn _contains(&self, key: &K) -> bool {
+        let bucket_index = FixedState::default().hash_one(key) as usize % NUM_BUCKETS;
         let mut curr_node = self.buckets[bucket_index];
         while curr_node != SENTINEL {
             let node = self.get_node(curr_node);
@@ -308,7 +310,7 @@ impl<
     }
 
     pub fn get_addr(&self, key: &K) -> u32 {
-        let bucket_index = DefaultHashBuilder::default().hash_one(key) as usize % NUM_BUCKETS;
+        let bucket_index = FixedState::default().hash_one(key) as usize % NUM_BUCKETS;
         let mut curr_node = self.buckets[bucket_index];
         while curr_node != SENTINEL {
             let node = self.get_node(curr_node);
@@ -321,7 +323,7 @@ impl<
         SENTINEL
     }
 
-    fn _iter(&self) -> HashTableIterator<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
+    const fn _iter(&self) -> HashTableIterator<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
         HashTableIterator::<K, V, NUM_BUCKETS, MAX_SIZE> {
             ht: self,
             bucket: 0,
@@ -329,7 +331,7 @@ impl<
         }
     }
 
-    fn _iter_mut(&mut self) -> HashTableIteratorMut<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
+    const fn _iter_mut(&mut self) -> HashTableIteratorMut<'_, K, V, NUM_BUCKETS, MAX_SIZE> {
         let node = self.buckets[0];
         HashTableIteratorMut::<K, V, NUM_BUCKETS, MAX_SIZE> {
             ht: self,
